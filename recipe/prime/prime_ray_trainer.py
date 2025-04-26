@@ -248,7 +248,6 @@ class RayPRIMETrainer(RayPPOTrainer):
             actor_local_path,
             actor_remote_path,
             self.global_steps,
-            remove_previous_ckpt=self.config.trainer.remove_previous_ckpt_in_save,
         )
 
         if self.use_rm:
@@ -262,7 +261,6 @@ class RayPRIMETrainer(RayPPOTrainer):
                 reward_local_path,
                 reward_remote_path,
                 self.global_steps,
-                remove_previous_ckpt=self.config.trainer.remove_previous_ckpt_in_save,
             )
 
         # save dataloader
@@ -331,7 +329,7 @@ class RayPRIMETrainer(RayPPOTrainer):
         if isinstance(self.train_dataloader.dataset, RLHFDataset):
             self.train_dataloader.dataset.resume_dataset_state()
 
-    def fit(self):
+    async def fit(self):
         """
         The training loop of PPO.
         The driver process only need to call the compute functions of the worker group through RPC to construct the PPO dataflow.
