@@ -1,5 +1,6 @@
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
 # Copyright 2022 The HuggingFace Team. All rights reserved.
+# Copyright 2025 Ruiyi Wang, PEARLS lab, University of California, San Diego, advised by Prithviraj Ammanabrolu.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -62,6 +63,89 @@ def get_kl_controller(kl_ctrl):
         return AdaptiveKLController(init_kl_coef=kl_ctrl.kl_coef, target_kl=kl_ctrl.target_kl, horizon=kl_ctrl.horizon)
     else:
         raise NotImplementedError
+
+
+# ADDED BY: Ruiyi Wang (04/29/2025)
+def compute_uniform_advantage_return(
+    token_level_rewards: torch.Tensor,
+    response_mask: torch.Tensor
+):
+    """
+    This function calculates advantages and returns as both accumulated sum of all rewards, as used in RAFT (without Best-of-N) and vanilla REINFORCE.
+    
+    Args:
+        token_level_rewards: `(torch.Tensor)`
+            shape: (bs, response_length)
+        response_mask: `(torch.Tensor)`
+            shape: (bs, response_length). [EOS] mask. The token after [EOS] have mask zero.
+    
+    Returns:
+        advantages: `(torch.Tensor)`
+            shape: (bs, response_length)
+        returns: `(torch.Tensor)`
+            shape: (bs, response_length)
+    """
+
+    # Get scalar reward for each response (usually the token-level reward at <EOS>)
+    with torch.no_grad():
+        scalar_scores = token_level_rewards.sum(dim=-1, keepdim=True)
+        advantages = scalar_scores * response_mask
+
+    returns = advantages.clone()
+
+    return advantages, returns
+
+
+# ADDED BY: Ruiyi Wang (04/29/2025)
+def compute_best_of_n_uniform_advantage_return(
+    token_level_rewards: torch.Tensor,
+    response_mask: torch.Tensor,
+    index: np.ndarray
+):
+    """
+    This function calculates the accumulated sum of all rewards, then picks the Best-of-N sample for each prompt, 
+    and assigns the accumulated sum for the best sample and 0.0 for other samples.
+
+    Args:
+        token_level_rewards: `(torch.Tensor)`
+            shape: (bs, response_length)
+        response_mask: `(torch.Tensor)`
+            shape: (bs, response_length). [EOS] mask. The token after [EOS] have mask zero.
+        index: `(np.ndarray)`
+            shape: (bs, )
+
+    Returns:
+        advantages: `(torch.Tensor)`
+            shape: (bs, response_length)
+        returns: `(torch.Tensor)`
+            shape: (bs, response_length)
+    """
+
+    with torch.no_grad():
+        scalar_scores = token_level_rewards[:,-1]
+
+        # Create dictionary to track best score for each prompt
+        prompt2best_score= {}
+        prompt2best_idx = {}
+
+        # Find the best score for each unique prompt
+        index_list = index.tolist()
+        for i, idx in enumerate(index_list):
+            if idx not in prompt2best_score or scalar_scores[i] > prompt2best_score[idx]:
+                prompt2best_score[idx] = scalar_scores[i]
+                prompt2best_idx[idx] = i
+
+        # Initialize advantage with zeros
+        advantages = torch.zeros_like(token_level_rewards)
+        
+        # Set the advantages for the best samples
+        for idx, best_i in prompt2best_idx.items():
+            best_score = prompt2best_score[idx]
+            advantages[best_i] = best_score * response_mask[best_i]
+        
+        returns = advantages.clone()
+
+        return advantages, returns
 
 
 def compute_gae_advantage_return(
@@ -351,7 +435,8 @@ def agg_loss(loss_mat: torch.Tensor, loss_mask: torch.Tensor, loss_agg_mode: str
     return loss
 
 
-def compute_policy_loss(
+# def compute_policy_loss(
+def compute_ppo_policy_loss(  # Modified by Ruiyi Wang (04/29/2025)
     old_log_prob,
     log_prob,
     advantages,
@@ -419,6 +504,39 @@ def compute_policy_loss(
     pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
 
     return pg_loss, pg_clipfrac, ppo_kl, pg_clipfrac_lower
+
+
+# ADDED BY: Ruiyi Wang (04/29/2025)
+def compute_reinforce_policy_loss(
+    log_prob,
+    advantages,
+    response_mask,
+    loss_agg_mode="token-mean",
+):
+    """Compute the REINFORCE policy gradient loss
+    
+    Args:
+        log_prob: `(torch.Tensor)`
+            shape: (bs, response_length)
+        advantages: `(torch.Tensor)`
+            shape: (bs, response_length)
+        response_mask: `(torch.Tensor)`
+            shape: (bs, response_length)
+        loss_agg_mode: (str) choices: "token-mean" /
+                                     "seq-mean-token-sum" /
+                                     "seq-mean-token-mean" /
+                                     "seq-mean-token-sum-norm" /
+            "token-mean" is the default behavior
+
+    Returns:
+        pg_loss: `a scalar torch.Tensor`
+            policy gradient loss computed via REINFORCE
+    """
+
+    pg_losses = -log_prob * advantages
+    pg_loss = agg_loss(loss_mat=pg_losses, loss_mask=response_mask, loss_agg_mode=loss_agg_mode)
+
+    return pg_loss
 
 
 def compute_entropy_loss(logits, response_mask):

@@ -1,4 +1,5 @@
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
+# Copyright 2025 Ruiyi Wang, PEARLS lab, University of California, San Diego, advised by Prithviraj Ammanabrolu. 
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -86,6 +87,9 @@ class AdvantageEstimator(str, Enum):
     REINFORCE_PLUS_PLUS_BASELINE = "reinforce_plus_plus_baseline"
     REMAX = "remax"
     RLOO = "rloo"
+    # Added by Ruiyi Wang (04/29/2025)
+    UNIFORM = "uniform"
+    BEST_OF_N_UNIFORM = "best_of_n_uniform"
 
 
 @dataclass
@@ -234,6 +238,22 @@ def compute_advantage(data: DataProto, adv_estimator, gamma=1.0, lam=1.0, num_re
         )
         data.batch["advantages"] = advantages
         data.batch["returns"] = returns
+    # Added by Ruiyi Wang (04/29/2025)
+    elif adv_estimator == AdvantageEstimator.UNIFORM:
+        advantages, returns = core_algos.compute_uniform_advantage_return(
+            token_level_rewards=data.batch["token_level_rewards"],
+            response_mask=data.batch["response_mask"],
+        )
+        data.batch["advantages"] = advantages
+        data.batch["returns"] = returns
+    elif adv_estimator == AdvantageEstimator.BEST_OF_N_UNIFORM:
+        advantages, returns = core_algos.compute_best_of_n_uniform_advantage_return(
+            token_level_rewards=data.batch["token_level_rewards"],
+            response_mask=data.batch["response_mask"],
+            index=data.non_tensor_batch["uid"],
+        )
+        data.batch["advantages"] = advantages
+        data.batch["returns"] = returns
     else:
         raise NotImplementedError
     return data
@@ -300,6 +320,9 @@ class RayPPOTrainer:
             AdvantageEstimator.REMAX,
             AdvantageEstimator.RLOO,
             AdvantageEstimator.REINFORCE_PLUS_PLUS_BASELINE,
+            # Added by Ruiyi Wang (04/29/2025)
+            AdvantageEstimator.UNIFORM,
+            AdvantageEstimator.BEST_OF_N_UNIFORM,
         ]:
             self.use_critic = False
         else:
