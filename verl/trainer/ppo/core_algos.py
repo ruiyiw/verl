@@ -96,11 +96,11 @@ def compute_uniform_advantage_return(
     return advantages, returns
 
 
-# ADDED BY: Ruiyi Wang (04/29/2025)
+# ADDED BY: Ruiyi Wang (05/01/2025)
 def compute_best_of_n_uniform_advantage_return(
     token_level_rewards: torch.Tensor,
     response_mask: torch.Tensor,
-    index: np.ndarray
+    repeat_times: int
 ):
     """
     This function calculates the accumulated sum of all rewards, then picks the Best-of-N sample for each prompt, 
@@ -111,8 +111,7 @@ def compute_best_of_n_uniform_advantage_return(
             shape: (bs, response_length)
         response_mask: `(torch.Tensor)`
             shape: (bs, response_length). [EOS] mask. The token after [EOS] have mask zero.
-        index: `(np.ndarray)`
-            shape: (bs, )
+        repeat_times: `int`
 
     Returns:
         advantages: `(torch.Tensor)`
@@ -124,27 +123,23 @@ def compute_best_of_n_uniform_advantage_return(
     with torch.no_grad():
         scalar_scores = token_level_rewards[:,-1]
 
-        # Create dictionary to track best score for each prompt
-        prompt2best_score= {}
-        prompt2best_idx = {}
-
         # Find the best score for each unique prompt
-        index_list = index.tolist()
-        for i, idx in enumerate(index_list):
-            if idx not in prompt2best_score or scalar_scores[i] > prompt2best_score[idx]:
-                prompt2best_score[idx] = scalar_scores[i]
-                prompt2best_idx[idx] = i
+        orig_bs = token_level_rewards.shape[0] // repeat_times
+        scalar_scores_reshaped = scalar_scores.view(orig_bs, repeat_times)
+        _, max_indices = torch.max(scalar_scores_reshaped, dim=1)
 
+        # Calculate the best indices
+        best_indices = torch.arange(0, orig_bs) * repeat_times + max_indices
+            
         # Initialize advantage with zeros
         advantages = torch.zeros_like(token_level_rewards)
         
         # Set the advantages for the best samples
-        for idx, best_i in prompt2best_idx.items():
-            best_score = prompt2best_score[idx]
-            advantages[best_i] = best_score * response_mask[best_i]
+        for idx in best_indices:
+            advantages[idx.item()] = scalar_scores[idx.item()] * response_mask[idx.item()]
         
         returns = advantages.clone()
-
+        
         return advantages, returns
 
 
