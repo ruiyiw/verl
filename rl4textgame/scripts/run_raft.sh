@@ -1,6 +1,6 @@
 set -x
-model_path=Qwen/Qwen2.5-0.5B
-data_path=../local/full_traj_ppo_parquet
+model_path=/local/model
+data_path=/local/full_traj_ppo_parquet
 adv_estimator=best_of_n_uniform
 policy_loss=reinforce
 rollout_num=4
