@@ -3,9 +3,10 @@ data_end=55000
 game_size=w2-o3-q4
 s3_train_data_dir="s3://ruiyi-search-agents/ppo_data/full_traj_ppo_data/tiny_search/5000_data/gold-only_depth-0_max-full-traj-len-12/"
 s3_games_dir="s3://ruiyi-search-agents/ppo_data/game_data/tiny_search/"
-local_train_data_dir="/local/full_traj_ppo_data/"
-local_games_dir="/local/games/"
-local_parquet_dir="/local/full_traj_ppo_parquet/"
+local_train_data_dir="local/full_traj_ppo_data/"
+local_games_dir="local/games/"
+local_parquet_dir="local/full_traj_ppo_parquet/"
+local_schema_dir="local/schemas/"
 
 # Download data from S3 bucket (should contain train.jsonl, validation.jsonl, and test.jsonl)
 aws s3 sync $s3_train_data_dir $local_train_data_dir
@@ -22,3 +23,8 @@ python3 -m rl4textgame.data_process.data_preprocess \
 
 # Remove .jsonl file
 rm -rf $local_train_data_dir
+
+# Generate json schema for guided vllm generation
+python3 -m rl4textgame.data_process.generate_json_schema \
+    --task textworld \
+    --local_dir $local_schema_dir
