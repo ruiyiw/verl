@@ -115,11 +115,27 @@ class RLHFDataset(Dataset):
         if self.filter_overlong_prompts:
             tokenizer = self.tokenizer
             prompt_key = self.prompt_key
-            self.dataframe = self.dataframe.filter(
-                lambda doc: len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True)) <= self.max_prompt_length,
-                num_proc=self.num_workers,
-                desc=f"Filtering prompts longer than {self.max_prompt_length} tokens",
-            )
+            # self.dataframe = self.dataframe.filter(
+            #     lambda doc: len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True)) <= self.max_prompt_length,
+            #     num_proc=self.num_workers,
+            #     desc=f"Filtering prompts longer than {self.max_prompt_length} tokens",
+            # )
+
+            # Modified by Ruiyi Wang (05/05/2025)
+            # Set chat_template to default (for base models) if tokenizer.chat_template is not found.
+            if not hasattr(tokenizer, 'chat_template') or tokenizer.chat_template is None:
+                default_chat_template = '{% for message in messages %}{{message["content"]+"\n"}}{% endfor %}'
+                self.dataframe = self.dataframe.filter(
+                    lambda doc: len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True, chat_template=default_chat_template)) <= self.max_prompt_length,
+                    num_proc=self.num_workers,
+                    desc=f"Filtering prompts longer than {self.max_prompt_length} tokens",
+                )
+            else:
+                self.dataframe = self.dataframe.filter(
+                    lambda doc: len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True)) <= self.max_prompt_length,
+                    num_proc=self.num_workers,
+                    desc=f"Filtering prompts longer than {self.max_prompt_length} tokens",
+                )
 
             print(f"filter dataset len: {len(self.dataframe)}")
 
@@ -194,7 +210,16 @@ class RLHFDataset(Dataset):
             row_dict["multi_modal_inputs"].pop("second_per_grid_ts", None)
 
         else:
-            raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            # raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            
+            # Modified by Ruiyi Wang (05/05/2025)
+            # Set chat_template to default (for base models) if tokenizer.chat_template is not found.
+            if not hasattr(self.tokenizer, 'chat_template') or self.tokenizer.chat_template is None:
+                default_chat_template = '{% for message in messages %}{{message["content"]+"\n"}}{% endfor %}'
+                raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, chat_template=default_chat_template)
+            else:
+                raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+
             model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=False)
             input_ids = model_inputs.pop("input_ids")
             attention_mask = model_inputs.pop("attention_mask")

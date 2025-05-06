@@ -147,6 +147,7 @@ class ActorRolloutRefWorker(Worker):
 
     def _build_model_optimizer(
         self,
+        config, # Added by Ruiyi Wang (05/05/2025)
         model_path,
         fsdp_config,
         optim_config,
@@ -172,8 +173,17 @@ class ActorRolloutRefWorker(Worker):
 
         # note that we have to create model in fp32. Otherwise, the optimizer is in bf16, which is incorrect
         # TODO(zhangchi.usc1992): 1. support create from random initialized model. 2. Support init with FSDP directly
-        self.tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
-        self.processor = hf_processor(local_path, trust_remote_code=trust_remote_code)
+        # self. = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
+        # self.processor = hf_processor(local_path, trust_remote_code=trust_remote_code)
+        
+        # Modified by Ruiyi Wang (05/05/2025)
+        # Support loading SFT models from local path
+        if config.model.is_local:
+            self.tokenizer = hf_tokenizer(config.model.base_model, trust_remote_code=True)
+            self.processor = hf_processor(config.model.base_model, use_fast=True)  # used for multimodal LLM, could be none
+        else:
+            self.tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
+            self.processor = hf_processor(local_path, use_fast=True)  # used for multimodal LLM, could be none
 
         torch_dtype = fsdp_config.get("model_dtype", None)
         if torch_dtype is None:
@@ -480,6 +490,7 @@ class ActorRolloutRefWorker(Worker):
                 optim_config = None
                 fsdp_config = OmegaConf.create()
             self.actor_module_fsdp, self.actor_optimizer, self.actor_lr_scheduler, self.actor_model_config = self._build_model_optimizer(
+                config=self.config, # Added by Ruiyi Wang (05/05/2025)
                 model_path=self.config.model.path,
                 fsdp_config=fsdp_config,
                 optim_config=optim_config,
@@ -514,6 +525,7 @@ class ActorRolloutRefWorker(Worker):
 
         if self._is_ref:
             self.ref_module_fsdp = self._build_model_optimizer(
+                config=self.config, # Added by Ruiyi Wang (05/05/2025)
                 model_path=self.config.model.path,
                 fsdp_config=self.config.ref.fsdp_config,
                 optim_config=None,
