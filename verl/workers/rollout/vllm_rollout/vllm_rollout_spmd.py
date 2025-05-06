@@ -169,6 +169,20 @@ class vLLMRollout(BaseRollout):
 
         self.pad_token_id = tokenizer.pad_token_id
 
+        # Added by Ruiyi Wang (05/05/2025)
+        # Enable vllm generating with guided json schema
+        if self.config.guided_vllm_generate:
+            from vllm.sampling_params import GuidedDecodingParams
+            import json
+            try:
+                with open(self.config.guided_json_schema, 'r') as f:
+                    json_schema = json.loads(f.read())
+                    guided_params = GuidedDecodingParams(json=json_schema)
+                    setattr(self.sampling_params, "guided_decoding", guided_params)
+            except:
+                raise FileNotFoundError
+            
+
     @contextmanager
     def update_sampling_params(self, **kwargs):
         # update sampling params
@@ -258,6 +272,8 @@ class vLLMRollout(BaseRollout):
                 sampling_params=self.sampling_params,
                 use_tqdm=False,
             )
+
+            print(self.sampling_params)
 
             # TODO(sgm): disable logprob when recompute_log_prob is enable
             # if n = 1: (bs, response_length) ; if n > 1: (bs * n, response_length)
