@@ -5,7 +5,7 @@ import pandas as pd
 from datasets import Dataset
 
 
-def textworld_make_map_fn(split, game_dir, dataset_id):
+def textworld_make_map_fn(split, game_dir, dataset_id, reward_method):
     """
     Add a row to each data item that represents a unique id
     """
@@ -27,7 +27,10 @@ def textworld_make_map_fn(split, game_dir, dataset_id):
                 "index": idx,
                 "response": example["response"],
                 "prompt": example["prompt"],
-                "game_path": game_dir
+                "game_path": game_dir,
+                "chunk_len": example["chunk_len"] if "chunk_len" in example.keys() else -1,
+                "chunk_id": example["chunk_id"] if "chunk_id" in example.keys() else -1,
+                "reward_method": reward_method
             },
         }
         return data
@@ -55,9 +58,9 @@ def main(args):
     test_dataset = Dataset.from_pandas(pd.DataFrame(test_dataset))
 
     if args.task == "textworld":
-        train_dataset = train_dataset.map(function=textworld_make_map_fn("train", args.game_dir, args.dataset_id), with_indices=True)
-        val_dataset = val_dataset.map(function=textworld_make_map_fn("validation", args.game_dir, args.dataset_id), with_indices=True)
-        test_dataset = test_dataset.map(function=textworld_make_map_fn("test", args.game_dir, args.dataset_id), with_indices=True)
+        train_dataset = train_dataset.map(function=textworld_make_map_fn("train", args.game_dir, args.dataset_id, args.reward_method), with_indices=True)
+        val_dataset = val_dataset.map(function=textworld_make_map_fn("validation", args.game_dir, args.dataset_id, args.reward_method), with_indices=True)
+        test_dataset = test_dataset.map(function=textworld_make_map_fn("test", args.game_dir, args.dataset_id, args.reward_method), with_indices=True)
     else:
         raise NotImplementedError
 
@@ -73,6 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("--game_dir", type=str, required=True, help="Path to the games directory.")
     parser.add_argument("--data_dir", type=str, required=True, help="Path to the data directory containing train.jsonl, validation.jsonl, and test.jsonl.")
     parser.add_argument("--local_dir", type=str, required=True, help="Path to the local directory to save the data parquet.")
+    parser.add_argument("--reward_method", type=str, required=True, choices=["game_winning", "exact_match"], help="0/1 reward computation method. ")
     
     args = parser.parse_args()
     main(args)
