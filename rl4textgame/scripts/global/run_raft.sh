@@ -1,17 +1,17 @@
 set -x
 
-s3_model_path=s3://ruiyi-search-agents/sft_ckpt/w2-o3-q4_raft/5000_data/epoch-1/
+s3_model_path=$S3_MODEL_PATH
 model_path=local/model
-base_model=meta-llama/Llama-3.1-8B
+base_model=$BASE_MODEL
 data_path=local/full_traj_ppo_parquet
 reward_func_path=rl4textgame/reward_score.py
 adv_estimator=best_of_n_uniform
 policy_loss=reinforce
-rollout_num=4
+rollout_num=$ROLLOUT_NUM
 vllm_json_schema=local/schemas/textworld.json
 
-project_name=textworld-ppo-full-traj
-experiment_name=raft-epoch-2
+project_name=$PROJECT_NAME
+experiment_name=$EXPERIMENT_NAME
 nnodes=1
 
 aws s3 sync $s3_model_path $model_path
