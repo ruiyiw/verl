@@ -121,7 +121,7 @@ def compute_best_of_n_uniform_advantage_return(
     """
 
     with torch.no_grad():
-        scalar_scores = token_level_rewards[:,-1]
+        scalar_scores = token_level_rewards.sum(dim=1)
 
         # Find the best score for each unique prompt
         orig_bs = token_level_rewards.shape[0] // repeat_times

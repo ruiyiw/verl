@@ -273,8 +273,6 @@ class vLLMRollout(BaseRollout):
                 use_tqdm=False,
             )
 
-            print(self.sampling_params)
-
             # TODO(sgm): disable logprob when recompute_log_prob is enable
             # if n = 1: (bs, response_length) ; if n > 1: (bs * n, response_length)
 
