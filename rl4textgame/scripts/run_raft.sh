@@ -1,6 +1,8 @@
 set -x
 model_path=local/model
+base_model=meta-llama/Llama-3.1-8B
 data_path=local/full_traj_ppo_parquet
+reward_func_path=rl4textgame/reward_score.py
 adv_estimator=best_of_n_uniform
 policy_loss=reinforce
 rollout_num=4
@@ -18,7 +20,7 @@ python3 -m rl4textgame.main_ppo \
     data.train_batch_size=256 \
     actor_rollout_ref.model.path=$model_path \
     actor_rollout_ref.model.is_local=True \
-    actor_rollout_ref.model.base_model=meta-llama/Llama-3.1-8B \
+    actor_rollout_ref.model.base_model=$base_model \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.policy_loss=$policy_loss \
@@ -37,7 +39,7 @@ python3 -m rl4textgame.main_ppo \
     actor_rollout_ref.rollout.n=$rollout_num \
     actor_rollout_ref.rollout.max_num_batched_tokens=8192 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
-    custom_reward_function.path="rl4textgame/reward_score.py" \
+    custom_reward_function.path=$reward_func_path \
     custom_reward_function.name=reward_func \
     algorithm.adv_estimator=$adv_estimator \
     trainer.logger=['console','wandb'] \
@@ -48,6 +50,8 @@ python3 -m rl4textgame.main_ppo \
     trainer.val_before_train=True \
     trainer.save_freq=5 \
     trainer.resume_mode=auto \
-    trainer.default_local_dir=checkpoints/$project_name/$experiment_name \
+    trainer.default_local_dir=checkpoints/$project_name/textworld-e2 \
+    trainer.resume_mode=resume_path \
+    trainer.resume_from_path=checkpoints/$project_name/$experiment_name/global_step_76 \
     trainer.test_freq=5 \
     trainer.total_epochs=1 $@
