@@ -10,9 +10,9 @@ local_schema_dir="local/schemas/"
 reward_method=$REWARD_METHOD
 
 # Download data from S3 bucket (should contain train.jsonl, validation.jsonl, and test.jsonl)
-aws s3 sync $s3_train_data_dir $local_train_data_dir
+aws s3 sync $s3_train_data_dir $local_train_data_dir --only-show-errors
 # Download games from S3 bucket
-aws s3 sync $s3_games_dir $local_games_dir
+aws s3 sync $s3_games_dir $local_games_dir --only-show-errors
 
 # Add training data and preprocess them into parquet
 python3 -m rl4textgame.data_process.data_preprocess \

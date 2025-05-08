@@ -14,7 +14,7 @@ project_name=$PROJECT_NAME
 experiment_name=$EXPERIMENT_NAME
 nnodes=1
 
-aws s3 sync $s3_model_path $model_path
+aws s3 sync $s3_model_path $model_path --only-show-errors
 
 python3 -m rl4textgame.main_ppo \
     data.train_files="$data_path/train.parquet" \
