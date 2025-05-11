@@ -1,10 +1,10 @@
 project_name=textworld-ppo-full-traj
-experiment_name=raft-epoch-2
-worker_type=actor
+experiment_name=ppo-epoch-1
+worker_type=critic
 original_hf_model_path=local/model
 ckpt_dir=checkpoints/$project_name/$experiment_name
 save_dir=local/saved_ckpt/
-s3_save_dir=s3://ruiyi-search-agents/sft_ckpt/w2-o3-q4_raft/5000_data/epoch-2/
+s3_save_dir=s3://ruiyi-search-agents/ppo_ckpt/w2-o3-q4-ppo-curriculum/k1-epoch-1/critic/
 
 mkdir $save_dir
 
