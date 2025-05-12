@@ -29,7 +29,7 @@ python3 scripts/model_merger.py \
 aws s3 sync $save_dir/actor $s3_save_dir/actor
 
 
-if [[ "$rl_type" == "ppo" ]]; then
+if [ "$rl_type" == "ppo" ]; then
     # Converting critic model for ppo
     python3 scripts/model_merger.py \
     --backend "fsdp" \
@@ -39,5 +39,6 @@ if [[ "$rl_type" == "ppo" ]]; then
 
     # Upload to S3 bucket
     aws s3 sync $save_dir/critic $s3_save_dir/critic
+fi
 
 rm -rf $save_dir

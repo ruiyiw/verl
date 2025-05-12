@@ -1,7 +1,7 @@
 set -x
 
-s3_model_path=s3://ruiyi-search-agents/sft_ckpt/w2-o3-q4_raft/5000_data/epoch-1/
-model_path=local/model
+s3_actor_model_path=s3://ruiyi-search-agents/sft_ckpt/w2-o3-q4_raft/5000_data/epoch-1/
+actor_model_path=local/model/actor
 base_model=meta-llama/Llama-3.1-8B
 data_path=local/full_traj_ppo_parquet
 reward_func_path=rl4textgame/reward_score.py
@@ -14,7 +14,16 @@ project_name=textworld-ppo-full-traj
 experiment_name=raft-epoch-2
 nnodes=1
 
-aws s3 sync $s3_model_path $model_path
+
+# Check if actor model is specified
+if [ -n "$s3_actor_model_path" ]; then
+    # If specified, download from S3 path if available
+    aws s3 sync $s3_actor_model_path $actor_model_path
+else
+    # Otherwise, use base model (from HF)
+    actor_model_path=$base_model
+fi
+
 
 python3 -m rl4textgame.main_ppo \
     data.train_files="$data_path/train.parquet" \
@@ -22,7 +31,7 @@ python3 -m rl4textgame.main_ppo \
     data.max_prompt_length=2048 \
     data.max_response_length=1024 \
     data.train_batch_size=256 \
-    actor_rollout_ref.model.path=$model_path \
+    actor_rollout_ref.model.path=$actor_model_path \
     actor_rollout_ref.model.is_local=True \
     actor_rollout_ref.model.base_model=$base_model \
     actor_rollout_ref.model.use_remove_padding=True \

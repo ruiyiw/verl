@@ -15,7 +15,7 @@ experiment_name=ppo-epoch-1
 nnodes=1
 
 # Check if actor model is specified
-if [[ -n "$s3_actor_model_path" ]]; then
+if [ -n "$s3_actor_model_path" ]; then
     # If specified, download from S3 path if available
     aws s3 sync $s3_actor_model_path $actor_model_path
 else
@@ -24,7 +24,7 @@ else
 fi
 
 # Check if critic model is specified
-if [[ -n "$s3_critic_model_path" ]]; then
+if [ -n "$s3_critic_model_path" ]; then
     # If specified, download from S3 path if available
     aws s3 sync $s3_critic_model_path $critic_model_path
 else

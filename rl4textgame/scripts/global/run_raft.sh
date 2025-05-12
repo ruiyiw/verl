@@ -15,7 +15,7 @@ nnodes=1
 
 
 # Check if actor model is specified
-if [[ -n "$S3_ACTOR_MODEL_PATH" ]]; then
+if [ -n "$S3_ACTOR_MODEL_PATH" ]; then
     # If specified, download from S3 path if available
     aws s3 sync $S3_ACTOR_MODEL_PATH $actor_model_path --only-show-errors
 else
