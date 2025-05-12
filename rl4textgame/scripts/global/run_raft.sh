@@ -12,6 +12,7 @@ vllm_json_schema=local/schemas/textworld.json
 project_name=$PROJECT_NAME
 experiment_name=$EXPERIMENT_NAME
 nnodes=1
+num_epochs=$NUM_EPOCHS
 
 
 # Check if actor model is specified
@@ -65,4 +66,4 @@ python3 -m rl4textgame.main_ppo \
     trainer.default_local_dir=checkpoints/$project_name/$experiment_name \
     trainer.resume_mode=auto \
     trainer.test_freq=5 \
-    trainer.total_epochs=1 $@
+    trainer.total_epochs=$num_epochs $@
