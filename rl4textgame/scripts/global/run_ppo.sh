@@ -7,7 +7,7 @@ data_path=local/full_traj_ppo_parquet
 reward_func_path=rl4textgame/reward_score.py
 adv_estimator=gae
 policy_loss=ppo
-rollout_num=4
+rollout_num=1
 vllm_json_schema=local/schemas/textworld.json
 
 project_name=$PROJECT_NAME
