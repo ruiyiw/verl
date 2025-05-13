@@ -15,6 +15,7 @@ project_name=$PROJECT_NAME
 experiment_name=$EXPERIMENT_NAME
 nnodes=1
 num_epochs=$NUM_EPOCHS
+s3_save_dir=$S3_SAVE_DIR
 
 
 # Check if actor model is specified
@@ -81,6 +82,7 @@ python3 -m rl4textgame.main_ppo \
     trainer.n_gpus_per_node=8 \
     trainer.val_before_train=True \
     trainer.save_freq=-1 \
+    trainer.s3_save_dir=$s3_save_dir \
     trainer.resume_mode=auto \
     trainer.test_freq=5 \
     trainer.total_epochs=$num_epochs $@

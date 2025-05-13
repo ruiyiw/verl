@@ -1139,6 +1139,17 @@ class RayPPOTrainer:
     
                     # Start the process and let it run independently
                     subprocess.Popen(cmd)
+
+                    cmd = [
+                        "aws", "s3", "sync", 
+                        f"local/tmp_ckpt/{model_type}", 
+                        f"{self.config.trainer.s3_save_dir}/epoch_{epoch+1}/{model_type}"
+                    ]
+
+                    print(f"Starting uploading {model_type} checkpoint at epoch {epoch} to S3")
+    
+                    subprocess.Popen(cmd)
+
                             
                 # Launch conversion for actor model
                 actor_thread = threading.Thread(

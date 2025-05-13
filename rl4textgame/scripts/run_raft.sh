@@ -14,6 +14,7 @@ project_name=textworld-ppo-full-traj
 experiment_name=raft-epoch-2
 nnodes=1
 num_epochs=1
+s3_save_dir=""
 
 
 # Check if actor model is specified
@@ -63,6 +64,7 @@ python3 -m rl4textgame.main_ppo \
     trainer.n_gpus_per_node=8 \
     trainer.val_before_train=True \
     trainer.save_freq=-1 \
+    trainer.s3_save_dir=$s3_save_dir \
     trainer.resume_mode=auto \
     trainer.test_freq=5 \
     trainer.total_epochs=$num_epochs $@
