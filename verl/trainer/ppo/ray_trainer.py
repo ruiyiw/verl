@@ -1118,6 +1118,7 @@ class RayPPOTrainer:
             # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
             with _timer("save_checkpoint", timing_raw):
                 self._save_checkpoint()
+                print(f"Starting conversion and uploading for checkpoint at epoch {epoch+1}.")
 
                 import subprocess
                 import threading
@@ -1135,7 +1136,6 @@ class RayPPOTrainer:
                         "--local_dir", os.path.join(local_global_step_folder, model_type),
                         "--target_dir", f"local/tmp_ckpt/{model_type}"
                     ]
-                    print(f"Starting conversion for {model_type} checkpoint at epoch {epoch}")
     
                     # Start the process and let it run independently
                     subprocess.Popen(cmd)
@@ -1145,8 +1145,6 @@ class RayPPOTrainer:
                         f"local/tmp_ckpt/{model_type}", 
                         f"{self.config.trainer.s3_save_dir}/epoch_{epoch+1}/{model_type}"
                     ]
-
-                    print(f"Starting uploading {model_type} checkpoint at epoch {epoch} to S3")
     
                     subprocess.Popen(cmd)
 
