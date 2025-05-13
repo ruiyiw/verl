@@ -9,6 +9,7 @@ adv_estimator=gae
 policy_loss=ppo
 rollout_num=1
 vllm_json_schema=local/schemas/textworld.json
+ppo_mini_batch_size=256
 
 project_name=textworld-ppo-full-traj
 experiment_name=ppo-epoch-1
@@ -45,7 +46,7 @@ python3 -m rl4textgame.main_ppo \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.policy_loss=$policy_loss \
-    actor_rollout_ref.actor.ppo_mini_batch_size=256 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.entropy_coeff=0.0 \
     actor_rollout_ref.actor.use_kl_loss=False \

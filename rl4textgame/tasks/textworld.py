@@ -57,6 +57,7 @@ def compute_score(solution_str: str, ground_truth: str, extra_info: Dict) -> flo
         solution = json.loads(solution_str)
     except json.JSONDecodeError:
         print("Failed to parse JSON")
+        print(solution_str)
         return 0.0
     
     # Extract action sequences with error handling

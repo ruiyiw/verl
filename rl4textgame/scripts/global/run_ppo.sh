@@ -7,8 +7,9 @@ data_path=local/full_traj_ppo_parquet
 reward_func_path=rl4textgame/reward_score.py
 adv_estimator=gae
 policy_loss=ppo
-rollout_num=1
+rollout_num=$ROLLOUT_NUM
 vllm_json_schema=local/schemas/textworld.json
+ppo_mini_batch_size=$PPO_MINI_BATCH_SIZE
 
 project_name=$PROJECT_NAME
 experiment_name=$EXPERIMENT_NAME
@@ -47,7 +48,7 @@ python3 -m rl4textgame.main_ppo \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.policy_loss=$policy_loss \
-    actor_rollout_ref.actor.ppo_mini_batch_size=256 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=$ppo_mini_batch_size \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.entropy_coeff=0.0 \
     actor_rollout_ref.actor.use_kl_loss=False \
