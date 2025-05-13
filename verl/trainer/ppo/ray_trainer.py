@@ -1129,26 +1129,25 @@ class RayPPOTrainer:
                     elif model_type == "critic":
                         hf_model_path = self.config.critic.model.path
                     
-                    print(hf_model_path)
-                    print(os.path.join(local_global_step_folder, model_type))
-                    print(f"local/tmp_ckpt/{model_type}")
-                    print(f"{self.config.trainer.s3_save_dir}/epoch_{epoch+1}/{model_type}")
+                    target_dir = f"local/tmp_ckpt/{model_type}"
+                    os.makedirs(target_dir, exist_ok=True)
 
                     cmd = [
                         "python3", "scripts/model_merger.py",
                         "--backend", "fsdp",
                         "--hf_model_path", hf_model_path,
                         "--local_dir", os.path.join(local_global_step_folder, model_type),
-                        "--target_dir", f"local/tmp_ckpt/{model_type}"
+                        "--target_dir", target_dir
                     ]
     
                     # Start the process and let it run independently
                     subprocess.Popen(cmd)
 
                     cmd = [
-                        "aws", "s3", "sync", 
-                        f"local/tmp_ckpt/{model_type}", 
-                        f"{self.config.trainer.s3_save_dir}/epoch_{epoch+1}/{model_type}"
+                        "aws", "s3", "sync",
+                        "--only-show-errors",
+                        target_dir,
+                        os.path.join(self.config.trainer.s3_save_dir, f"epoch_{epoch+1}", model_type)
                     ]
     
                     subprocess.Popen(cmd)
