@@ -1157,7 +1157,7 @@ class RayPPOTrainer:
                 # Launch conversion for actor model
                 actor_thread = threading.Thread(
                     target=convert_and_upload_checkpoint,
-                    args=("actor")
+                    args=("actor",)
                 )
                 actor_thread.daemon = True
                 actor_thread.start()
@@ -1165,7 +1165,7 @@ class RayPPOTrainer:
                 # Launch conversion for critic model
                 critic_thread = threading.Thread(
                     target=convert_and_upload_checkpoint,
-                    args=("critic")
+                    args=("critic",)
                 )
                 critic_thread.daemon = True
                 critic_thread.start()
