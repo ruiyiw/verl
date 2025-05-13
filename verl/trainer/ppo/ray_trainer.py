@@ -1128,6 +1128,11 @@ class RayPPOTrainer:
                         hf_model_path = self.config.actor_rollout_ref.model.path
                     elif model_type == "critic":
                         hf_model_path = self.config.critic.model.path
+                    
+                    print(hf_model_path)
+                    print(os.path.join(local_global_step_folder, model_type))
+                    print(f"local/tmp_ckpt/{model_type}")
+                    print(f"{self.config.trainer.s3_save_dir}/epoch_{epoch+1}/{model_type}")
 
                     cmd = [
                         "python3", "scripts/model_merger.py",
