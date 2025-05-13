@@ -62,9 +62,7 @@ python3 -m rl4textgame.main_ppo \
     trainer.nnodes=$nnodes \
     trainer.n_gpus_per_node=8 \
     trainer.val_before_train=True \
-    trainer.save_freq=5 \
-    trainer.resume_mode=auto \
-    trainer.default_local_dir=checkpoints/$project_name/$experiment_name \
+    trainer.save_freq=-1 \
     trainer.resume_mode=auto \
     trainer.test_freq=5 \
     trainer.total_epochs=$num_epochs $@

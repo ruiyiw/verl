@@ -1113,3 +1113,46 @@ class RayPPOTrainer:
 
                 progress_bar.update(1)
                 self.global_steps += 1
+
+            # Added by Ruiyi Wang (05/13/2025)
+            # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
+            with _timer("save_checkpoint", timing_raw):
+                self._save_checkpoint()
+
+                import subprocess
+                import threading
+                def convert_and_upload_checkpoint(model_type: str):
+                    local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
+                    if model_type == "actor":
+                        hf_model_path = self.config.actor_rollout_ref.model.path
+                    elif model_type == "critic":
+                        hf_model_path = self.config.critic.model.path
+
+                    cmd = [
+                        "python3", "scripts/model_merger.py",
+                        "--backend", "fsdp",
+                        "--hf_model_path", hf_model_path,
+                        "--local_dir", os.path.join(local_global_step_folder, model_type),
+                        "--target_dir", f"local/tmp_ckpt/{model_type}"
+                    ]
+                    print(f"Starting conversion for {model_type} checkpoint at epoch {epoch}")
+    
+                    # Start the process and let it run independently
+                    subprocess.Popen(cmd)
+                            
+                # Launch conversion for actor model
+                actor_thread = threading.Thread(
+                    target=convert_and_upload_checkpoint,
+                    args=("actor")
+                )
+                actor_thread.daemon = True
+                actor_thread.start()
+
+                # Launch conversion for critic model
+                critic_thread = threading.Thread(
+                    target=convert_and_upload_checkpoint,
+                    args=("critic")
+                )
+                critic_thread.daemon = True
+                critic_thread.start()
+
