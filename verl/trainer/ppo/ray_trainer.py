@@ -1118,10 +1118,8 @@ class RayPPOTrainer:
             # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
             with _timer("save_checkpoint", timing_raw):
                 self._save_checkpoint()
-                print(f"Starting conversion and uploading for checkpoint at epoch {epoch+1}.")
 
                 import subprocess
-                import threading
                 def convert_and_upload_checkpoint(model_type: str):
                     local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
                     if model_type == "actor":
@@ -1141,31 +1139,22 @@ class RayPPOTrainer:
                     ]
     
                     # Start the process and let it run independently
-                    subprocess.Popen(cmd)
+                    subprocess.run(cmd, check=True)
 
                     cmd = [
                         "aws", "s3", "sync",
                         "--only-show-errors",
                         target_dir,
-                        os.path.join(self.config.trainer.s3_save_dir, f"epoch_{epoch+1}", model_type)
+                        os.path.join(self.config.trainer.s3_save_dir.rstrip('/'), f"epoch_{epoch+1}", model_type)
                     ]
     
-                    subprocess.Popen(cmd)
+                    subprocess.run(cmd, check=True)
 
-                            
-                # Launch conversion for actor model
-                actor_thread = threading.Thread(
-                    target=convert_and_upload_checkpoint,
-                    args=("actor",)
-                )
-                actor_thread.daemon = True
-                actor_thread.start()
+                print(f"Starting conversion and uploading for actor checkpoint at epoch {epoch+1}.")
+                convert_and_upload_checkpoint("actor")
 
-                # Launch conversion for critic model
-                critic_thread = threading.Thread(
-                    target=convert_and_upload_checkpoint,
-                    args=("critic",)
-                )
-                critic_thread.daemon = True
-                critic_thread.start()
+                if self.use_critic:
+                    print(f"Starting conversion and uploading for critic checkpoint at epoch {epoch+1}.")
+                    convert_and_upload_checkpoint("critic")
+
 
