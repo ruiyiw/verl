@@ -77,10 +77,17 @@ def compute_score(solution_str: str, ground_truth: str, extra_info: Dict) -> flo
         print(f"Error extracting action sequence: {e}")
         return 0.0
     
-    if extra_info["reward_method"] == "game_winning":
-        return game_winning_reward(action_seq, ground_truth, extra_info)
-    elif extra_info["reward_method"] == "exact_match":
-        return exact_match_reward(action_seq, extra_info)
-    else:
-        raise NotImplementedError
+    
+    try:
+        if extra_info["reward_method"] == "game_winning":
+            return game_winning_reward(action_seq, ground_truth, extra_info)
+        elif extra_info["reward_method"] == "exact_match":
+            return exact_match_reward(action_seq, extra_info)
+        else:
+            raise NotImplementedError
+    except Exception as e:
+        # Catch any exception and log it
+        print(f"Error in compute_score: {type(e).__name__}: {e}")
+        return 0.0
+
     
