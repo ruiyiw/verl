@@ -62,6 +62,8 @@ from verl.utils.torch_functional import masked_mean
 from verl.utils.tracking import ValidationGenerationsLogger
 from verl.workers.rollout.async_server import AsyncLLMServerManager
 
+import subprocess
+
 WorkerType = Type[Worker]
 
 
@@ -1107,6 +1109,17 @@ class RayPPOTrainer:
                 logger.log(data=metrics, step=self.global_steps)
 
                 if is_last_step:
+                    # Added by Ruiyi Wang (05/13/2025)
+                    with _timer("save_checkpoint", timing_raw):
+                        self._save_checkpoint()
+
+                        print(f"Starting conversion and uploading for actor checkpoint at epoch {epoch+1}.")
+                        self.convert_and_upload_checkpoint("actor")
+
+                        if self.use_critic:
+                            print(f"Starting conversion and uploading for critic checkpoint at epoch {epoch+1}.")
+                            self.convert_and_upload_checkpoint("critic")
+                            
                     pprint(f"Final validation metrics: {last_val_metrics}")
                     progress_bar.close()
                     return
@@ -1115,46 +1128,47 @@ class RayPPOTrainer:
                 self.global_steps += 1
 
             # Added by Ruiyi Wang (05/13/2025)
-            # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
             with _timer("save_checkpoint", timing_raw):
                 self._save_checkpoint()
 
-                import subprocess
-                def convert_and_upload_checkpoint(model_type: str):
-                    local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
-                    if model_type == "actor":
-                        hf_model_path = self.config.actor_rollout_ref.model.path
-                    elif model_type == "critic":
-                        hf_model_path = self.config.critic.model.path
-                    
-                    target_dir = f"local/tmp_ckpt/{model_type}"
-                    os.makedirs(target_dir, exist_ok=True)
-
-                    cmd = [
-                        "python3", "scripts/model_merger.py",
-                        "--backend", "fsdp",
-                        "--hf_model_path", hf_model_path,
-                        "--local_dir", os.path.join(local_global_step_folder, model_type),
-                        "--target_dir", target_dir
-                    ]
-    
-                    # Start the process and let it run independently
-                    subprocess.run(cmd, check=True)
-
-                    cmd = [
-                        "aws", "s3", "sync",
-                        "--only-show-errors",
-                        target_dir,
-                        os.path.join(self.config.trainer.s3_save_dir.rstrip('/'), f"epoch_{epoch+1}", model_type)
-                    ]
-    
-                    subprocess.run(cmd, check=True)
-
                 print(f"Starting conversion and uploading for actor checkpoint at epoch {epoch+1}.")
-                convert_and_upload_checkpoint("actor")
+                self.convert_and_upload_checkpoint("actor")
 
                 if self.use_critic:
                     print(f"Starting conversion and uploading for critic checkpoint at epoch {epoch+1}.")
-                    convert_and_upload_checkpoint("critic")
+                    self.convert_and_upload_checkpoint("critic")
+
+
+    # Added by Ruiyi Wang (05/13/2025)
+    # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
+    def convert_and_upload_checkpoint(self, model_type: str):
+        local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
+        if model_type == "actor":
+            hf_model_path = self.config.actor_rollout_ref.model.path
+        elif model_type == "critic":
+            hf_model_path = self.config.critic.model.path
+        
+        target_dir = f"local/tmp_ckpt/{model_type}"
+        os.makedirs(target_dir, exist_ok=True)
+
+        cmd = [
+            "python3", "scripts/model_merger.py",
+            "--backend", "fsdp",
+            "--hf_model_path", hf_model_path,
+            "--local_dir", os.path.join(local_global_step_folder, model_type),
+            "--target_dir", target_dir
+        ]
+
+        # Start the process and let it run independently
+        subprocess.run(cmd, check=True)
+
+        cmd = [
+            "aws", "s3", "sync",
+            "--only-show-errors",
+            target_dir,
+            os.path.join(self.config.trainer.s3_save_dir.rstrip('/'), f"epoch_{epoch+1}", model_type)
+        ]
+
+        subprocess.run(cmd, check=True)
 
 
