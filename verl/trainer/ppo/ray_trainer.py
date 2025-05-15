@@ -1114,11 +1114,11 @@ class RayPPOTrainer:
                         self._save_checkpoint()
 
                         print(f"Starting conversion and uploading for actor checkpoint at epoch {epoch+1}.")
-                        self.convert_and_upload_checkpoint("actor")
+                        self.convert_and_upload_checkpoint("actor", epoch)
 
                         if self.use_critic:
                             print(f"Starting conversion and uploading for critic checkpoint at epoch {epoch+1}.")
-                            self.convert_and_upload_checkpoint("critic")
+                            self.convert_and_upload_checkpoint("critic", epoch)
                             
                     pprint(f"Final validation metrics: {last_val_metrics}")
                     progress_bar.close()
@@ -1132,16 +1132,16 @@ class RayPPOTrainer:
                 self._save_checkpoint()
 
                 print(f"Starting conversion and uploading for actor checkpoint at epoch {epoch+1}.")
-                self.convert_and_upload_checkpoint("actor")
+                self.convert_and_upload_checkpoint("actor", epoch)
 
                 if self.use_critic:
                     print(f"Starting conversion and uploading for critic checkpoint at epoch {epoch+1}.")
-                    self.convert_and_upload_checkpoint("critic")
+                    self.convert_and_upload_checkpoint("critic", epoch)
 
 
     # Added by Ruiyi Wang (05/13/2025)
     # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
-    def convert_and_upload_checkpoint(self, model_type: str):
+    def convert_and_upload_checkpoint(self, model_type: str, epoch: int):
         local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
         if model_type == "actor":
             hf_model_path = self.config.actor_rollout_ref.model.path
