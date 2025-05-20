@@ -1153,6 +1153,7 @@ class RayPPOTrainer:
 
         cmd = [
             "python3", "scripts/model_merger.py",
+            "merge",
             "--backend", "fsdp",
             "--hf_model_path", hf_model_path,
             "--local_dir", os.path.join(local_global_step_folder, model_type),
