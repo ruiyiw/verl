@@ -125,7 +125,7 @@ class RLHFDataset(Dataset):
             # Modified by Ruiyi Wang (05/05/2025)
             # Set chat_template to default (for base models) if tokenizer.chat_template is not found.
             if not hasattr(tokenizer, 'chat_template') or tokenizer.chat_template is None:
-                default_chat_template = '{% for message in messages %}{{message["content"]+"\n"}}{% endfor %}'
+                default_chat_template = '{% for message in messages %}{{message["content"]}}{% endfor %}'
                 self.dataframe = self.dataframe.filter(
                     lambda doc: len(tokenizer.apply_chat_template(doc[prompt_key], add_generation_prompt=True, chat_template=default_chat_template)) <= self.max_prompt_length,
                     num_proc=self.num_workers,
@@ -216,11 +216,16 @@ class RLHFDataset(Dataset):
             # Modified by Ruiyi Wang (05/05/2025)
             # Set chat_template to default (for base models) if tokenizer.chat_template is not found.
             if not hasattr(self.tokenizer, 'chat_template') or self.tokenizer.chat_template is None:
-                default_chat_template = '{% for message in messages %}{{message["content"]+"\n"}}{% endfor %}'
+                default_chat_template = '{% for message in messages %}{{message["content"]}}{% endfor %}'
                 raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False, chat_template=default_chat_template)
             else:
                 raw_prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
 
+            # Added by Ruiyi Wang (05/26/2025)
+            # Correct vllm generate error by adding the missing BOS token to prompts
+            if raw_prompt[0] != self.tokenizer.bos_token:
+                raw_prompt = self.tokenizer.bos_token + raw_prompt
+                
             model_inputs = self.tokenizer(raw_prompt, return_tensors="pt", add_special_tokens=False)
             input_ids = model_inputs.pop("input_ids")
             attention_mask = model_inputs.pop("attention_mask")
