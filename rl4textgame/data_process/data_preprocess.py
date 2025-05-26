@@ -76,7 +76,7 @@ if __name__ == "__main__":
     parser.add_argument("--game_dir", type=str, required=True, help="Path to the games directory.")
     parser.add_argument("--data_dir", type=str, required=True, help="Path to the data directory containing train.jsonl, validation.jsonl, and test.jsonl.")
     parser.add_argument("--local_dir", type=str, required=True, help="Path to the local directory to save the data parquet.")
-    parser.add_argument("--reward_method", type=str, required=True, choices=["game_winning", "exact_match"], help="0/1 reward computation method. ")
+    parser.add_argument("--reward_method", type=str, required=True, choices=["game_winning", "exact_match", "game_winning_dense"], help="0/1 reward computation method. ")
     
     args = parser.parse_args()
     main(args)
