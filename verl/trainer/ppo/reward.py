@@ -75,6 +75,12 @@ def load_reward_manager(config, tokenizer, num_examine, **reward_kwargs):
         from verl.workers.reward_manager import DAPORewardManager
 
         reward_manager_cls = DAPORewardManager
+    # Added by Ruiyi Wang (05/26/2025)
+    # Support interactive multi-turn sync rollout with game env for vllm backend
+    elif reward_manager_name == "dense":
+        from verl.workers.reward_manager import DenseRewardManager
+
+        reward_manager_cls = DenseRewardManager
     else:
         raise NotImplementedError
 

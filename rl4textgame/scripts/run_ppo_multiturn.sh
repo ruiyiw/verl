@@ -10,6 +10,10 @@ adv_estimator=gae
 policy_loss=ppo
 rollout_num=1
 ppo_mini_batch_size=256
+multiturn_max_turns=8
+interactive_env=textworld
+SEP_TOKEN=\"'<|spec|>'\"
+format_reward=0.2
 
 project_name=textworld-ppo-multiturn
 experiment_name=ppo-multiturn-test
@@ -43,7 +47,7 @@ python3 -m rl4textgame.main_ppo \
     data.max_response_length=1024 \
     data.train_batch_size=256 \
     actor_rollout_ref.model.path=$actor_model_path \
-    actor_rollout_ref.model.is_local=True \
+    actor_rollout_ref.model.is_local=False \
     actor_rollout_ref.model.base_model=$base_model \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -55,6 +59,11 @@ python3 -m rl4textgame.main_ppo \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.rollout.name=vllm \
+    actor_rollout_ref.rollout.multiturn_config.is_multiturn=True \
+    actor_rollout_ref.rollout.multiturn_config.max_turns=$multiturn_max_turns \
+    actor_rollout_ref.rollout.multiturn_config.interactive_env=$interactive_env \
+    actor_rollout_ref.rollout.multiturn_config.sep_token=$SEP_TOKEN \
+    actor_rollout_ref.rollout.multiturn_config.format_reward=$format_reward \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
@@ -68,6 +77,7 @@ python3 -m rl4textgame.main_ppo \
     critic.ppo_micro_batch_size_per_gpu=32 \
     critic.model.fsdp_config.param_offload=False \
     critic.model.fsdp_config.optimizer_offload=False \
+    reward_model.reward_manager=dense \
     custom_reward_function.path=$reward_func_path \
     custom_reward_function.name=reward_func \
     algorithm.adv_estimator=$adv_estimator \

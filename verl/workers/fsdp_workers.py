@@ -1,4 +1,5 @@
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
+# Copyright 2025 Ruiyi Wang, PEARLS lab, University of California, San Diego, advised by Prithviraj Ammanabrolu.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -659,6 +660,144 @@ class ActorRolloutRefWorker(Worker):
             output = self.rollout_sharding_manager.postprocess_data(output)
 
         output = output.to("cpu")
+
+        # clear kv cache
+        get_torch_device().empty_cache()
+        return output
+
+    # Added by Ruiyi Wang (05/26/2025)
+    # Support interactive multi-turn sync rollout with game env for vllm backend
+    @register(dispatch_mode=Dispatch.DP_COMPUTE_PROTO)
+    def generate_multiturn_sequences(self, prompts: DataProto):
+        
+        import numpy as np
+        # Helper functions for multiturn generation
+        def get_valid_output_ids(data_item: DataProto):
+            output_ids = data_item.batch["responses"]
+            input_len = data_item.batch["prompts"].shape[-1]
+            valid_output_len = data_item.batch["attention_mask"][input_len:].sum()
+            valid_output_ids = output_ids[:valid_output_len]
+            return valid_output_ids
+
+        def check_sep_token_and_decode(output_ids: torch.Tensor, sep_token_id: int):
+            has_sep_token = False
+            # Split by the separator token
+            positions = torch.where(output_ids == sep_token_id)[0]
+            if len(positions) > 0:
+                has_sep_token = True
+                pos = positions[0].item()
+                output_text = self.tokenizer.decode(output_ids[:pos], skip_special_tokens=True)
+            else:
+                pos = output_ids.shape[-1] - 1
+                output_text = self.tokenizer.decode(output_ids, skip_special_tokens=True)
+
+            return output_text, has_sep_token, pos
+
+        def format_next_prompt(prev_prompt: str, curr_action: str, next_obs: str):
+            next_prompt = prev_prompt + f"action: {curr_action}\n\n" + f"state: {next_obs}\n\n"
+            return next_prompt
+        
+        def format_multiturn_response(action_seq, sep_token):
+            output = ""
+            for action in action_seq:
+                output += action + sep_token
+            return output
+
+        # Support all hardwares
+        prompts = prompts.to(get_torch_device().current_device())
+
+        assert self._is_rollout
+
+        meta_info = {
+            "eos_token_id": self.generation_config.eos_token_id if self.generation_config is not None else self.tokenizer.eos_token_id,
+            # "pad_token_id": self.generation_config.pad_token_id if self.generation_config is not None else self.tokenizer.pad_token_id,
+            "pad_token_id": self.tokenizer.pad_token_id,
+            "sep_token_id": self.tokenizer.sep_token_id
+        }
+        prompts.meta_info.update(meta_info)
+
+        if self.config.rollout.multiturn_config.interactive_env == "textworld":
+            from rl4textgame.game_envs.textworld import GameEnv
+        else:
+            raise NotImplementedError
+
+        with self.rollout_sharding_manager:
+
+            input_batch = prompts
+            batched_actions = [[] for _ in range(len(input_batch))]
+            batched_abs_sep_pos = [[] for _ in range(len(input_batch))]
+            batched_game_winning = [False for _ in range(len(input_batch))]
+            batched_final_reward = [self.config.rollout.multiturn_config.format_reward for _ in range(len(input_batch))] # initialize final reward with format reward 
+
+            # Start multi-turn rollout by interacting with GameEnv
+            for k in range(self.config.rollout.multiturn_config.max_turns):
+                # Generate batched output from vllm
+                # Only pass not succeeded interactions by selecting input_batch indices
+                selected_indices = [i for i, value in enumerate(batched_game_winning) if not value]
+                # Early stop multiturn if all responses pass the game
+                if len(selected_indices) == 0:
+                    break
+                selected_input_batch = input_batch[selected_indices]
+                
+                log_gpu_memory_usage(f"After entering rollout sharding manager at turn {k+1}", logger=logger)
+                processed_input_batch = self.rollout_sharding_manager.preprocess_data(selected_input_batch)
+                raw_output_batch = self.rollout.generate_sequences(prompts=processed_input_batch)
+                output_batch = self.rollout_sharding_manager.postprocess_data(raw_output_batch)
+                log_gpu_memory_usage(f"After rollout generation at turn {k+1}", logger=logger)
+
+                next_input_ids_list = [[] for _ in range(len(input_batch))]
+                # For each datapoint in batch, interactive with game env and union back to batch
+                for i in range(len(selected_indices)):
+                    # Process and decode output
+                    idx = selected_indices[i]
+                    output_ids = get_valid_output_ids(output_batch[i])
+                    output_text, has_sep_token, sep_pos = check_sep_token_and_decode(output_ids=output_ids, sep_token_id=meta_info["sep_token_id"])
+                    batched_actions[idx].append(output_text)
+                    # Add format penalty
+                    if not has_sep_token:
+                        batched_final_reward[idx] -= self.config.rollout.multiturn_config.format_reward
+                    # Locate sep token position in output ids
+                    abs_sep_pos = sep_pos if len(batched_abs_sep_pos[idx]) == 0 else batched_abs_sep_pos[idx][-1] + sep_pos + 1
+                    batched_abs_sep_pos[idx].append(abs_sep_pos)
+                    # Interactive with game env and get next observation
+                    game_filename = output_batch[i].non_tensor_batch["reward_model"]["ground_truth"]
+                    game_dir = output_batch[i].non_tensor_batch["extra_info"]["game_path"]
+                    game_env = GameEnv(game_file=os.path.join(game_dir, f"{game_filename}.z8"))
+                    next_obs, is_winning = game_env.replay(commands=batched_actions[idx])
+                    batched_game_winning[idx] = is_winning
+                    batched_final_reward[idx] += 1.0 if is_winning else 0.0
+                    # Construct and encode next input
+                    input_text = self.tokenizer.decode(input_batch[idx].batch["input_ids"], skip_special_tokens=True)
+                    next_input_text = format_next_prompt(input_text, output_text, next_obs)
+                    next_input_ids = self.tokenizer.encode(next_input_text, add_special_tokens=False)
+                    next_input_ids_list[idx] = next_input_ids
+                
+                # Append next input ids to --> prompts.non_tensor_batch["raw_prompt_ids"]
+                # [Important!] In vllm_rollout_spmd.py, function generate_sequences, only raw_prompts_id are passed to vllm generate.
+                input_batch.non_tensor_batch["raw_prompt_ids"] = np.array(next_input_ids_list, dtype=object)
+                # (Left) Pad next input ids and transform to tensor --> prompts.batch["input_ids"]
+                next_input_batch_ids = torch.tensor([
+                    [meta_info["pad_token_id"]] * (self.config.rollout.multiturn_config.prompt_len - len(ids)) + ids
+                    for ids in next_input_ids_list
+                ]).to(get_torch_device().current_device())
+                # Modify input batch for next turn
+                input_batch.batch["input_ids"] = next_input_batch_ids
+            
+            raise RuntimeError
+
+        # Stack and pad multiturn output
+        multiturn_output_batch_text = [format_multiturn_response(action_seq, self.config.rollout.multiturn_config.sep_token) for action_seq in batched_actions]
+        multiturn_output_batch_ids = [self.tokenizer.encode(text, add_special_tokens=True) for text in multiturn_output_batch_text]
+        multiturn_output_batch_ids = torch.tensor([
+                                        ids + [meta_info["pad_token_id"]] * (self.config.rollout.multiturn_config.response_len - len(ids))
+                                        for ids in multiturn_output_batch_ids
+                                    ]).to(get_torch_device().current_device())
+        prompts.batch["prompts"] = prompts.batch["input_ids"]
+        prompts.batch["responses"] = multiturn_output_batch_ids
+        prompts.non_tensor_batch["multiturn_sep_pos"] = batched_abs_sep_pos
+        # Clip the final reward to [0.0, 1.0]
+        prompts.non_tensor_batch["multiturn_final_rewards"] = [min(1.0, max(0.0, reward)) for reward in batched_final_reward]
+        output = prompts.to("cpu")
 
         # clear kv cache
         get_torch_device().empty_cache()

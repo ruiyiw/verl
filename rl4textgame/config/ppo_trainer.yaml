@@ -92,6 +92,14 @@ actor_rollout_ref:
     name: vllm
     mode: sync # sync: LLM, async: AsyncLLM
     chat_scheduler: null # async chat scheduler, e.g examples.ppo_trainer.naive_chat_scheduler.NaiveChatCompletionScheduler
+    multiturn_config: # Added
+      is_multiturn: False
+      max_turns: -1
+      interactive_env: null
+      sep_token: null
+      format_reward: 0.0
+      prompt_len: ${data.max_prompt_length}
+      response_len: ${data.max_response_length}
     guided_vllm_generate: False # Added
     guided_json_schema: /local/template.json # Added
     temperature: 1.0

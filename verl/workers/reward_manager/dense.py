@@ -1,4 +1,5 @@
 # Copyright 2024 Bytedance Ltd. and/or its affiliates
+# Copyright 2025 Ruiyi Wang, PEARLS lab, University of California, San Diego, advised by Prithviraj Ammanabrolu.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +21,8 @@ from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 
 
+# Added by Ruiyi Wang(05/26/2025)
+# Support interactive multi-turn sync rollout with game env for vllm backend
 class DenseRewardManager:
     """The reward manager."""
 

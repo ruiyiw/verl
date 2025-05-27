@@ -935,6 +935,11 @@ class RayPPOTrainer:
                 # pop those keys for generation
                 batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
                 non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
+                # Added by Ruiyi Wang (05/26/2025)
+                # Support interactive multi-turn sync rollout with game env for vllm backend
+                if self.config.actor_rollout_ref.rollout.multiturn_config.is_multiturn:
+                    non_tensor_batch_keys_to_pop += ["reward_model", "extra_info"]
+
                 if "multi_modal_inputs" in batch.non_tensor_batch:
                     non_tensor_batch_keys_to_pop.extend(["multi_modal_data", "multi_modal_inputs"])
                 if "raw_prompt" in batch.non_tensor_batch:
@@ -952,7 +957,13 @@ class RayPPOTrainer:
                     # generate a batch
                     with _timer("gen", timing_raw):
                         if not self.async_rollout_mode:
-                            gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
+                            # gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
+                            # Modified by Ruiyi Wang (05/26/2025)
+                            # Support interactive multi-turn sync rollout with game env for vllm backend
+                            if self.config.actor_rollout_ref.rollout.multiturn_config.is_multiturn:
+                                gen_batch_output = self.actor_rollout_wg.generate_multiturn_sequences(gen_batch)
+                            else:
+                                gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
                             self.async_rollout_manager.wake_up()
                             gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
