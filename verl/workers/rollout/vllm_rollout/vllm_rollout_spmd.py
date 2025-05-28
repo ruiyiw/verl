@@ -357,6 +357,67 @@ class vLLMRollout(BaseRollout):
         return DataProto(batch=batch, non_tensor_batch=non_tensor_batch)
 
 
+    # Added by Ruiyi Wang (05/27/2025)
+    # Update correct attention masks and position ids for multi-turn rollout selected input in a batch [only for rollout n = 1]
+    @torch.no_grad()
+    def update_multiturn_input_masks_and_positions(self, prompts: DataProto, next_input_ids_list: List[List[int]], prompt_seq_len: int) -> DataProto:
+        device = prompts.batch["input_ids"].device
+        batch_size = len(next_input_ids_list)
+        # Since the lengths of each row of new_input_ids are different, we need to process the sequence and pad them one by one
+        batched_input_ids = []
+        batched_attention_mask = []
+        batched_position_ids = []
+        for i in range(batch_size):
+            new_seq_len = len(next_input_ids_list[i])
+            # Left padding
+            batched_input_ids.append([self.pad_token_id] * (prompt_seq_len - new_seq_len) + next_input_ids_list[i])
+            batched_attention_mask.append([0] * (prompt_seq_len - new_seq_len) + [1] * new_seq_len)
+            batched_position_ids.append([0] * (prompt_seq_len - new_seq_len) + list(range(new_seq_len)))
+        
+        # Update multiturn_input
+        prompts.batch["input_ids"] = torch.tensor(batched_input_ids, dtype=torch.long).to(device)
+        prompts.batch["attention_mask"] = torch.tensor(batched_attention_mask, dtype=torch.long).to(device)
+        prompts.batch["position_ids"] = torch.tensor(batched_position_ids, dtype=torch.long).to(device)
+
+        return prompts
+
+    # Added by Ruiyi Wang (05/27/2025)
+    # Build correct attention masks and positions for multi-turn rollout [only for rollout n = 1]
+    @torch.no_grad()
+    def build_multiturn_output_masks_and_positions(self, prompts: DataProto, multiturn_response_ids_list: List[List[int]], response_seq_len: int) -> DataProto:
+        #  We need to format the multiturn output DataProto to the following format (original output from generate_sequences)
+        #  batch = TensorDict(
+        #     {
+        #         "prompts": idx,
+        #         "responses": response,
+        #         "input_ids": seq,  # here input_ids become the whole sentences
+        #         "attention_mask": attention_mask,
+        #         "position_ids": position_ids,
+        #     },
+        #     batch_size=batch_size,
+        # )
+        device = prompts.batch["input_ids"].device
+        multiturn_output_batch_ids = torch.tensor([
+                                        ids + [self.pad_token_id] * (response_seq_len - len(ids))
+                                        for ids in multiturn_response_ids_list
+                                    ]).to(device)
+        prompts.batch["responses"] = multiturn_output_batch_ids
+        # Construct input_ids and attention mask
+        attention_mask = prompts.batch["attention_mask"]
+        eos_token_id = prompts.meta_info["eos_token_id"]
+        response_attention_mask = get_response_mask(response_id=multiturn_output_batch_ids, eos_token=eos_token_id, dtype=attention_mask.dtype)
+        prompts.batch["attention_mask"] = torch.cat((attention_mask, response_attention_mask), dim=-1)
+        prompts.batch["input_ids"] = torch.cat([prompts.batch["input_ids"], multiturn_output_batch_ids], dim=-1)
+        # Construct position_ids (prompt: left pad + response: right pad)
+        position_ids = prompts.batch["position_ids"]
+        delta_position_id = torch.arange(1, response_seq_len + 1, device=device)
+        delta_position_id = delta_position_id.unsqueeze(0).expand(position_ids.size(0), -1)
+        response_position_ids = position_ids[..., -1:] + delta_position_id
+        prompts.batch["position_ids"] = torch.cat([position_ids, response_position_ids], dim=-1)
+
+        return prompts
+
+
 class vLLMAsyncRollout:
     """vLLMAsyncRollout is a thin wrapper of WorkerWrapperBase,
     which is engine in single worker process.
