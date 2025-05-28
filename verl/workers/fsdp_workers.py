@@ -774,23 +774,23 @@ class ActorRolloutRefWorker(Worker):
                     next_input_ids = self.tokenizer.encode(next_input_text, add_special_tokens=False)
                     next_input_ids_list[idx] = next_input_ids
                 
+                # Update input_batch DataProto for next turn
+                input_batch = self.rollout.update_multiturn_input_masks_and_positions(prompts=input_batch, next_input_ids_list=next_input_ids_list, prompt_seq_len=self.config.rollout.multiturn_config.prompt_len)
                 # Append next input ids to --> prompts.non_tensor_batch["raw_prompt_ids"]
                 # [Important!] In vllm_rollout_spmd.py, function generate_sequences, only raw_prompts_id are passed to vllm generate.
                 input_batch.non_tensor_batch["raw_prompt_ids"] = np.array(next_input_ids_list, dtype=object)
-                # Update input_batch DataProto for next turn
-                input_batch = self.rollout.update_multiturn_input_masks_and_positions(prompts=input_batch, next_input_ids_list=next_input_ids_list, prompt_seq_len=self.config.rollout.multiturn_config.prompt_len)
         
         # Stack and pad multiturn output
         multiturn_response_batch_text = [format_multiturn_response(action_seq, self.config.rollout.multiturn_config.sep_token) for action_seq in batched_actions]
         multiturn_response_ids_list = [self.tokenizer.encode(text, add_special_tokens=True) for text in multiturn_response_batch_text]
         # Build output_batch DataProto
-        prompts = self.rollout.build_multiturn_output_masks_and_positions(prompts=prompts, multiturn_response_ids_list=multiturn_response_ids_list, response_seq_len=self.config.rollout.multiturn_config.response_len)
+        output = self.rollout.build_multiturn_output_masks_and_positions(prompts=prompts, multiturn_response_ids_list=multiturn_response_ids_list, response_seq_len=self.config.rollout.multiturn_config.response_len)
         
-        prompts.non_tensor_batch["multiturn_sep_pos"] = batched_abs_sep_pos
+        output.non_tensor_batch["multiturn_sep_pos"] = np.array(batched_abs_sep_pos, dtype=object)
         # Clip the final reward to [0.0, 1.0]
-        prompts.non_tensor_batch["multiturn_final_rewards"] = [min(1.0, max(0.0, reward)) for reward in batched_final_reward]
+        output.non_tensor_batch["multiturn_final_rewards"] = np.array([min(1.0, max(0.0, reward)) for reward in batched_final_reward])
 
-        output = prompts.to("cpu")
+        output = output.to("cpu")
 
         # clear kv cache
         get_torch_device().empty_cache()
