@@ -20,15 +20,15 @@ import torch
 from verl import DataProto
 from verl.utils.reward_score import _default_compute_score
 
-
-# Added by Ruiyi Wang(05/26/2025)
-# Support interactive multi-turn sync rollout with game env for vllm backend
+# Added by Ruiyi Wang(05/28/2025)
+# Support dense reward assignment for multiturn RL
 class DenseRewardManager:
     """The reward manager."""
 
-    def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source") -> None:
+    def __init__(self, tokenizer, num_examine, compute_score=None, reward_fn_key="data_source", **kwargs) -> None:
         self.tokenizer = tokenizer
         self.num_examine = num_examine  # the number of batches of decoded responses to print to the console
+        self.alpha = kwargs.pop('alpha', 0.0)  # Extract alpha from reward_model kwargs with default value
         self.compute_score = compute_score or _default_compute_score
         self.reward_fn_key = reward_fn_key
 
@@ -65,28 +65,24 @@ class DenseRewardManager:
             prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
             response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
 
-            ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
+            score = data_item.non_tensor_batch["multiturn_final_rewards"]
+            sep_pos = data_item.non_tensor_batch["multiturn_sep_pos"]
+
+            # Assign dense reward to reward tensor [α^k r, ..., α^2 r, α^2 r, ..., α r, α r, α r, r]
+            for j, pos in enumerate(reversed(sep_pos)):
+                if j == 0:
+                    reward_tensor[i, pos] = score
+                else:
+                    for k in range(pos, prev_pos):
+                        reward_tensor[i, k] = score
+                prev_pos = pos
+                score *= self.alpha
+            
+            for k in range(sep_pos[0]):
+                reward_tensor[i, k] = score
 
             data_source = data_item.non_tensor_batch[self.reward_fn_key]
-
-            extra_info = data_item.non_tensor_batch.get("extra_info", None)
-
-            score = self.compute_score(
-                data_source=data_source,
-                solution_str=response_str,
-                ground_truth=ground_truth,
-                extra_info=extra_info,
-            )
-
-            if isinstance(score, dict):
-                reward = score["score"]
-                # Store the information including original reward
-                for key, value in score.items():
-                    reward_extra_info[key].append(value)
-            else:
-                reward = score
-
-            reward_tensor[i, valid_response_length - 1] = reward
+            ground_truth = data_item.non_tensor_batch["extra_info"]["response"]
 
             if data_source not in already_print_data_sources:
                 already_print_data_sources[data_source] = 0

@@ -12,8 +12,10 @@ rollout_num=1
 ppo_mini_batch_size=256
 multiturn_max_turns=8
 interactive_env=textworld
+
 SEP_TOKEN=\"'<|spec|>'\"
-format_reward=0.2
+format_reward=0.1
+dense_reward_alpha=0.9
 
 project_name=textworld-ppo-multiturn
 experiment_name=ppo-multiturn-test
@@ -78,6 +80,7 @@ python3 -m rl4textgame.main_ppo \
     critic.model.fsdp_config.param_offload=False \
     critic.model.fsdp_config.optimizer_offload=False \
     reward_model.reward_manager=dense \
+    reward_model.reward_kwargs.alpha=$dense_reward_alpha \
     custom_reward_function.path=$reward_func_path \
     custom_reward_function.name=reward_func \
     algorithm.adv_estimator=$adv_estimator \
