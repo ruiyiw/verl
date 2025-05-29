@@ -1232,6 +1232,8 @@ class RayPPOTrainer:
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)
 
+                progress_bar.update(1)
+                self.global_steps += 1
                 if is_last_step:
                     # Added by Ruiyi Wang (05/13/2025)
                     with _timer("save_checkpoint", timing_raw):
@@ -1247,9 +1249,6 @@ class RayPPOTrainer:
                     pprint(f"Final validation metrics: {last_val_metrics}")
                     progress_bar.close()
                     return
-
-                progress_bar.update(1)
-                self.global_steps += 1
 
             # Added by Ruiyi Wang (05/13/2025)
             with _timer("save_checkpoint", timing_raw):
