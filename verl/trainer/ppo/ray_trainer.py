@@ -1165,7 +1165,7 @@ class RayPPOTrainer:
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                             multi_turn=self.config.actor_rollout_ref.rollout.multi_turn.enable,
                             # Modified by Ruiyi Wang (05/01/2025)
-                            repeat_times=self.config.actor_rollout_ref.rollout.n
+                            repeat_times=self.config.actor_rollout_ref.rollout.n,
                             use_pf_ppo=self.config.algorithm.use_pf_ppo,
                             pf_ppo_reweight_method=self.config.algorithm.pf_ppo.reweight_method,
                             pf_ppo_weight_pow=self.config.algorithm.pf_ppo.weight_pow,
