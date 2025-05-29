@@ -222,6 +222,8 @@ reward_model:
   sandbox_fusion:
     url: null # faas url to run code in cloud sandbox
     max_concurrent: 64 # max concurrent requests to sandbox
+  reward_kwargs:  # Added
+    alpha: 0.9
 
 custom_reward_function:
   path: null
@@ -239,7 +241,11 @@ algorithm:
     kl_coef: 0.001
     horizon: 10000
     target_kl: 0.1
-
+  use_pf_ppo: False
+  pf_ppo:
+    reweight_method: pow  # ["pow", "max_min", "max_random"]
+    weight_pow: 2.0
+    
 trainer:
   balance_batch: True
   total_epochs: 30
