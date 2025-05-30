@@ -847,6 +847,7 @@ class ActorRolloutRefWorker(Worker):
         # Build output_batch DataProto
         output = self.rollout.build_multiturn_output_masks_and_positions(prompts=prompts, multiturn_response_ids_list=multiturn_response_ids_list, response_seq_len=self.config.rollout.multiturn_config.response_len)
         
+        output.non_tensor_batch["raw_response_text"] = np.array(multiturn_response_batch_text, dtype=object)
         output.non_tensor_batch["multiturn_sep_pos"] = np.array(batched_abs_sep_pos, dtype=object)
         # Clip the final reward to [0.0, 1.0]
         output.non_tensor_batch["multiturn_final_rewards"] = np.array([min(1.0, max(0.0, reward)) for reward in batched_final_reward])

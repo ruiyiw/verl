@@ -636,12 +636,25 @@ class RayPPOTrainer:
 
         with open(filename, "w") as f:
             for i in range(n):
-                entry = {k: v[i] for k, v in base_data.items()}
+                # entry = {k: v[i] for k, v in base_data.items()}
+                entry = {k: str(v[i]) for k, v in base_data.items()} # Modified by Ruiyi Wang (05/29/2025)
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
         print(f"Dumped generations to {filename}")
 
-    def _maybe_log_val_generations(self, inputs, outputs, scores):
+    # Added by Ruiyi Wang (05/29/2025)
+    # Add validation metrics for interactive multi-turn dense reward RL
+    def _upload_val_results(self, filename):
+        # Upload what was saved in local dir to S3 bucket
+        cmd = [
+            "aws", "s3", "sync",
+            "--only-show-errors",
+            filename,
+            os.path.join(self.config.trainer.s3_save_dir.rstrip('/'), "val_results")
+        ]
+        subprocess.run(cmd, check=True)
+
+    def  _maybe_log_val_generations(self, inputs, outputs, scores):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
 
         generations_to_log = self.config.trainer.log_val_generations
@@ -692,6 +705,11 @@ class RayPPOTrainer:
 
             batch_keys_to_pop = ["input_ids", "attention_mask", "position_ids"]
             non_tensor_batch_keys_to_pop = ["raw_prompt_ids"]
+            # Added by Ruiyi Wang (05/29/2025)
+            # Add validation metrics for interactive multi-turn dense reward RL
+            if self.config.actor_rollout_ref.rollout.multiturn_config.is_multiturn:
+                non_tensor_batch_keys_to_pop += ["reward_model", "extra_info"]
+
             if "multi_modal_data" in test_batch.non_tensor_batch:
                 non_tensor_batch_keys_to_pop.append("multi_modal_data")
             if "raw_prompt" in test_batch.non_tensor_batch:
@@ -715,7 +733,13 @@ class RayPPOTrainer:
             # pad to be divisible by dp_size
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
             if not self.async_rollout_mode:
-                test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
+                # test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
+                # Modified by Ruiyi Wang (05/29/2025)
+                # Add validation metrics for interactive multi-turn dense reward RL
+                if self.config.actor_rollout_ref.rollout.multiturn_config.is_multiturn:
+                    test_output_gen_batch_padded = self.actor_rollout_wg.generate_multiturn_sequences(test_gen_batch_padded)
+                else:
+                    test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
             else:
                 self.async_rollout_manager.wake_up()
                 test_output_gen_batch_padded = self.async_rollout_manager.generate_sequences(test_gen_batch_padded)
@@ -724,26 +748,54 @@ class RayPPOTrainer:
             # unpad
             test_output_gen_batch = unpad_dataproto(test_output_gen_batch_padded, pad_size=pad_size)
             print("validation generation end")
-
+            
+            # Modified by Ruiyi Wang (05/29/2025)
+            # Add validation metrics for interactive multi-turn dense reward RL
             # Store generated outputs
-            output_ids = test_output_gen_batch.batch["responses"]
-            output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
+            if not self.config.actor_rollout_ref.rollout.multiturn_config.is_multiturn:
+                output_ids = test_output_gen_batch.batch["responses"]
+                output_texts = [self.tokenizer.decode(ids, skip_special_tokens=True) for ids in output_ids]
+            else:
+                # For multiturn rollout, we just use the raw responses with sep token from rollout generation
+                output_texts = test_output_gen_batch.non_tensor_batch["raw_response_text"]
+            
             sample_outputs.extend(output_texts)
 
             test_batch = test_batch.union(test_output_gen_batch)
 
-            # evaluate using reward_function
-            result = self.val_reward_fn(test_batch, return_dict=True)
-            reward_tensor = result["reward_tensor"]
-            scores = reward_tensor.sum(-1).cpu().tolist()
+            # # evaluate using reward_function
+            # result = self.val_reward_fn(test_batch, return_dict=True)
+            # reward_tensor = result["reward_tensor"]
+            # scores = reward_tensor.sum(-1).cpu().tolist()
+            # sample_scores.extend(scores)
+
+            # reward_extra_infos_dict["reward"].extend(scores)
+            # if "reward_extra_info" in result:
+            #     for key, lst in result["reward_extra_info"].items():
+            #         reward_extra_infos_dict[key].extend(lst)
+            #
+            # data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
+            # Modified by Ruiyi Wang (05/29/2025)
+            # Add validation metrics for interactive multi-turn dense reward RL
+            if not self.config.actor_rollout_ref.rollout.multiturn_config.is_multiturn:
+                # evaluate using reward_function
+                result = self.val_reward_fn(test_batch, return_dict=True)
+                reward_tensor = result["reward_tensor"]
+                scores = reward_tensor.sum(-1).cpu().tolist()
+                if "reward_extra_info" in result:
+                    for key, lst in result["reward_extra_info"].items():
+                        reward_extra_infos_dict[key].extend(lst)
+                data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
+            else:
+                # For multiturn rollout, we just use the final rewards from rollout generation
+                scores = test_batch.non_tensor_batch["multiturn_final_rewards"]
+                num_actions = np.array([len(sep_pos_list) for sep_pos_list in test_batch.non_tensor_batch["multiturn_sep_pos"]])
+                reward_extra_infos_dict["num_actions"].extend(num_actions)
+                data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * scores.shape[0]))
+            
             sample_scores.extend(scores)
-
             reward_extra_infos_dict["reward"].extend(scores)
-            if "reward_extra_info" in result:
-                for key, lst in result["reward_extra_info"].items():
-                    reward_extra_infos_dict[key].extend(lst)
-
-            data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
+            
 
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
@@ -757,6 +809,9 @@ class RayPPOTrainer:
                 reward_extra_infos_dict=reward_extra_infos_dict,
                 dump_path=val_data_dir,
             )
+            # Added by Ruiyi Wang (05/29/2025)
+            # Add validation metrics for interactive multi-turn dense reward RL
+            self._upload_val_results(val_data_dir)
 
         for key_info, lst in reward_extra_infos_dict.items():
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"

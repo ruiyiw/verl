@@ -88,9 +88,10 @@ python3 -m rl4textgame.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$project_name \
     trainer.experiment_name=$experiment_name \
+    trainer.validation_data_dir="local/val_results" \
     trainer.nnodes=$nnodes \
     trainer.n_gpus_per_node=8 \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.save_freq=-1 \
     trainer.s3_save_dir=$s3_save_dir \
     trainer.resume_mode=auto \
