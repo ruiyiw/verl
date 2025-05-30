@@ -71,7 +71,7 @@ class DenseRewardManager:
             # Assign dense reward to reward tensor [α^k r, ..., α^2 r, α^2 r, ..., α r, α r, α r, r]
             for j, pos in enumerate(reversed(sep_pos)):
                 # Discard reward if pos is larger than response length
-                if pos >= response_ids.size(1):
+                if pos >= len(response_ids):
                     break
                 if j == 0:
                     reward_tensor[i, pos] = score
