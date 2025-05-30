@@ -1321,19 +1321,14 @@ class RayPPOTrainer:
     # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
     def convert_and_upload_checkpoint(self, model_type: str, epoch: int):
         local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
-        if model_type == "actor":
-            hf_model_path = self.config.actor_rollout_ref.model.path
-        elif model_type == "critic":
-            hf_model_path = self.config.critic.model.path
         
         target_dir = f"local/tmp_ckpt/{model_type}"
         os.makedirs(target_dir, exist_ok=True)
 
         cmd = [
-            "python3", "scripts/model_merger.py",
+            "python3", "-m", "scripts.model_merger",
             "merge",
             "--backend", "fsdp",
-            "--hf_model_path", hf_model_path,
             "--local_dir", os.path.join(local_global_step_folder, model_type),
             "--target_dir", target_dir
         ]
