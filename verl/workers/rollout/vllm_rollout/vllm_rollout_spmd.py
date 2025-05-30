@@ -387,10 +387,14 @@ class vLLMRollout(BaseRollout):
         batched_position_ids = []
         for i in range(batch_size):
             new_seq_len = len(next_input_ids_list[i])
+            # Truncate input length if larger than max prompt length
             # Left padding
-            batched_input_ids.append([self.pad_token_id] * (prompt_seq_len - new_seq_len) + next_input_ids_list[i])
-            batched_attention_mask.append([0] * (prompt_seq_len - new_seq_len) + [1] * new_seq_len)
-            batched_position_ids.append([0] * (prompt_seq_len - new_seq_len) + list(range(new_seq_len)))
+            batched_input_ids.append([self.pad_token_id] * (prompt_seq_len - new_seq_len) + next_input_ids_list[i]
+                                     if prompt_seq_len < new_seq_len else next_input_ids_list[:prompt_seq_len])
+            batched_attention_mask.append([0] * (prompt_seq_len - new_seq_len) + [1] * new_seq_len
+                                          if prompt_seq_len < new_seq_len else [1] * prompt_seq_len)
+            batched_position_ids.append([0] * (prompt_seq_len - new_seq_len) + list(range(new_seq_len))
+                                        if prompt_seq_len < new_seq_len else list(range(prompt_seq_len)))
         
         # Update multiturn_input
         multiturn_input = TensorDict(
@@ -422,10 +426,14 @@ class vLLMRollout(BaseRollout):
         device = prompts.batch["input_ids"].device
         batch_size = prompts.batch["input_ids"].size(0)
         # Construct responses_ids
-        multiturn_output_batch_ids = torch.tensor([
-                                        ids + [self.pad_token_id] * (response_seq_len - len(ids))
-                                        for ids in multiturn_response_ids_list
-                                    ]).to(device)
+        # Truncate output length if larger than max response length
+        padded_multiturn_response_ids_list = []
+        for ids in multiturn_response_ids_list:
+            if response_seq_len < len(ids):
+                padded_multiturn_response_ids_list.append(ids[:response_seq_len])
+            else:
+                padded_multiturn_response_ids_list.append(ids + [self.pad_token_id] * (response_seq_len - len(ids)))
+        multiturn_output_batch_ids = torch.tensor(padded_multiturn_response_ids_list).to(device)
         # Construct input_ids and attention mask
         attention_mask = prompts.batch["attention_mask"]
         eos_token_id = prompts.meta_info["eos_token_id"]

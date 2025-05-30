@@ -70,6 +70,9 @@ class DenseRewardManager:
 
             # Assign dense reward to reward tensor [α^k r, ..., α^2 r, α^2 r, ..., α r, α r, α r, r]
             for j, pos in enumerate(reversed(sep_pos)):
+                # Discard reward if pos is larger than response length
+                if pos >= response_ids.size(1):
+                    break
                 if j == 0:
                     reward_tensor[i, pos] = score
                 else:
@@ -78,8 +81,10 @@ class DenseRewardManager:
                 prev_pos = pos
                 score *= self.alpha
             
-            for k in range(sep_pos[0]):
-                reward_tensor[i, k] = score
+            # Discard reward if pos is larger than response length
+            if sep_pos[0] < response_ids.size(1):
+                for k in range(sep_pos[0]):
+                    reward_tensor[i, k] = score
 
             data_source = data_item.non_tensor_batch[self.reward_fn_key]
             ground_truth = data_item.non_tensor_batch["extra_info"]["response"]
