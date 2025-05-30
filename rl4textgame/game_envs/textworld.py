@@ -47,6 +47,15 @@ class GameEnv():
 
         return obs
 
+    
+    def _safe_step(self, command: str):
+        """Safely execute a step, falling back to empty command on Unicode errors"""
+        try:
+            return self.env.step(command)
+        except:
+            print(f"Game backend error with command '{command}'")
+            return self.env.step("")
+
 
     def replay(self, commands: List[str]):
         """
@@ -54,7 +63,7 @@ class GameEnv():
         """
         is_winning = False
         for command in commands:
-            game_state, reward, done = self.env.step(command)
+            game_state, reward, done = self._safe_step(command)
             obs = self.format_observation(game_state)
             if done:
                 is_winning = True
