@@ -84,6 +84,7 @@ python3 -m rl4textgame.main_ppo \
     custom_reward_function.path=$reward_func_path \
     custom_reward_function.name=reward_func \
     algorithm.adv_estimator=$adv_estimator \
+    algorithm.use_kl_in_reward=True\
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$project_name \
