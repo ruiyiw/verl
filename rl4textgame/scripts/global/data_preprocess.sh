@@ -3,9 +3,9 @@ data_end=55000
 game_size=w2-o3-q4
 s3_train_data_dir=$S3_TRAIN_DATA_DIR
 s3_games_dir=$S3_GAMES_DIR
-local_train_data_dir="local/full_traj_ppo_data/"
+local_train_data_dir="local/train_data/"
 local_games_dir="local/games/"
-local_parquet_dir="local/full_traj_ppo_parquet/"
+local_parquet_dir="local/train_parquet/"
 local_schema_dir="local/schemas/"
 reward_method=$REWARD_METHOD
 

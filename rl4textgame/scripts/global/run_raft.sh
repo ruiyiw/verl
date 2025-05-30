@@ -2,7 +2,7 @@ set -x
 
 actor_model_path=local/model/actor
 base_model=$BASE_MODEL
-data_path=local/full_traj_ppo_parquet
+data_path=local/train_parquet
 reward_func_path=rl4textgame/reward_score.py
 adv_estimator=best_of_n_uniform
 policy_loss=reinforce
