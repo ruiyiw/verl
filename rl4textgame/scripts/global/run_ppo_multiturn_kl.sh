@@ -46,7 +46,7 @@ python3 -m rl4textgame.main_ppo \
     data.train_files="$data_path/train.parquet" \
     data.val_files="$data_path/validation.parquet" \
     data.max_prompt_length=2048 \
-    data.max_response_length=1024 \
+    data.max_response_length=2048 \
     data.train_batch_size=256 \
     actor_rollout_ref.model.path=$actor_model_path \
     actor_rollout_ref.model.is_local=False \
@@ -68,7 +68,7 @@ python3 -m rl4textgame.main_ppo \
     actor_rollout_ref.rollout.multiturn_config.format_reward=$format_reward \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.7 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.n=$rollout_num \
     actor_rollout_ref.rollout.max_num_batched_tokens=8192 \
     actor_rollout_ref.rollout.val_kwargs.temperature=1.0 \
