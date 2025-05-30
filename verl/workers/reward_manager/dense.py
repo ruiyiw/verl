@@ -82,7 +82,7 @@ class DenseRewardManager:
                 score *= self.alpha
             
             # Discard reward if pos is larger than response length
-            if sep_pos[0] < response_ids.size(1):
+            if sep_pos[0] < len(response_ids):
                 for k in range(sep_pos[0]):
                     reward_tensor[i, k] = score
 
