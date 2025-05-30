@@ -48,8 +48,18 @@ class GameEnv():
         return obs
 
     
+    def _sanitize_command(self, command: str):
+        """Fix error of Z-machine: DUMB-FROTZ: unknown escape char: """
+        if not isinstance(command, str):
+            return ""
+        
+        # Remove all backslashes - they're rarely valid in text adventure commands
+        return command.replace('\\', '').strip()
+
+
     def _safe_step(self, command: str):
         """Safely execute a step, falling back to empty command on Unicode errors"""
+        command = self._sanitize_command(command)
         try:
             return self.env.step(command)
         except:
