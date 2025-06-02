@@ -3,9 +3,9 @@ data_end=55000
 game_size=w2-o3-q4
 s3_train_data_dir="s3://ruiyi-search-agents/ppo_data/multiturn_ppo_data/tiny_search/5000_data/"
 s3_games_dir="s3://ruiyi-search-agents/ppo_data/game_data/tiny_search/"
-local_train_data_dir="local/full_multiturn_data/"
+local_train_data_dir="local/full_train_data/"
 local_games_dir="local/games/"
-local_parquet_dir="local/full_multiturn_parquet/"
+local_parquet_dir="local/full_train_parquet/"
 local_schema_dir="local/schemas/"
 
 # Download data from S3 bucket (should contain train.jsonl, validation.jsonl, and test.jsonl)
