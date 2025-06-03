@@ -419,10 +419,10 @@ class vLLMRollout(BaseRollout):
 
         return DataProto(batch=multiturn_input, non_tensor_batch=prompts.non_tensor_batch, meta_info=prompts.meta_info)
 
-    # Added by Ruiyi Wang (05/27/2025)
+    # Added by Ruiyi Wang (06/02/2025)
     # Build correct attention masks and positions for multi-turn rollout [only for rollout n = 1]
     @torch.no_grad()
-    def build_multiturn_output_masks_and_positions(self, prompts: DataProto, multiturn_response_ids_list: List[List[int]], response_seq_len: int) -> DataProto:
+    def build_multiturn_output_masks_and_positions(self, prompts: DataProto, multiturn_response_ids_list: List[List[int]], batched_sep_pos: List[List[int]], batched_action_bos: List[List[int]], response_seq_len: int) -> DataProto:
         #  We need to format the multiturn output DataProto to the following format (original output from generate_sequences)
         #  batch = TensorDict(
         #     {
@@ -436,15 +436,31 @@ class vLLMRollout(BaseRollout):
         # )
         device = prompts.batch["input_ids"].device
         batch_size = prompts.batch["input_ids"].size(0)
-        # Construct responses_ids
+        # Construct responses_ids (Right padding)
         # Truncate output length if larger than max response length
         padded_multiturn_response_ids_list = []
-        for ids in multiturn_response_ids_list:
+        response_loss_masks = [] # track which response tokens to train on
+
+        for idx, ids in enumerate(multiturn_response_ids_list):
             if response_seq_len < len(ids):
                 padded_multiturn_response_ids_list.append(ids[:response_seq_len])
             else:
                 padded_multiturn_response_ids_list.append(ids + [self.pad_token_id] * (response_seq_len - len(ids)))
+
+            # Construct response loss mask
+            loss_mask = [0] * response_seq_len
+            # Set loss mask to 1 for tokens between action_bos and sep_pos
+            for action_bos, sep_pos in zip(batched_action_bos[idx], batched_sep_pos[idx]):
+                # Skip invalid ranges:
+                if action_bos >= response_seq_len or sep_pos >= response_seq_len:
+                    continue
+                for k in range(action_bos, sep_pos + 1):  # Include sep_pos
+                    loss_mask[k] = 1
+            
+            response_loss_masks.append(loss_mask)
+
         multiturn_output_batch_ids = torch.tensor(padded_multiturn_response_ids_list).to(device)
+        multiturn_response_loss_mask = torch.tensor(response_loss_masks, dtype=torch.bool).to(device)
         # Construct input_ids and attention mask
         attention_mask = prompts.batch["attention_mask"]
         eos_token_id = prompts.meta_info["eos_token_id"]
@@ -456,6 +472,10 @@ class vLLMRollout(BaseRollout):
         delta_position_id = delta_position_id.unsqueeze(0).expand(position_ids.size(0), -1)
         response_position_ids = position_ids[..., -1:] + delta_position_id
 
+        # Create combined loss mask (prompt = 0, response = selective)
+        prompt_loss_mask = torch.zeros_like(prompts.batch["input_ids"], dtype=torch.bool)
+        combined_loss_mask = torch.cat([prompt_loss_mask, multiturn_response_loss_mask], dim=-1)
+
         # Construct new data protocol
         output = TensorDict(
             {
@@ -463,7 +483,8 @@ class vLLMRollout(BaseRollout):
                 "responses": multiturn_output_batch_ids,
                 "input_ids": torch.cat([prompts.batch["input_ids"], multiturn_output_batch_ids], dim=-1),  # here input_ids become the whole sentences
                 "attention_mask": torch.cat((attention_mask, response_attention_mask), dim=-1),
-                "position_ids": torch.cat([position_ids, response_position_ids], dim=-1)
+                "position_ids": torch.cat([position_ids, response_position_ids], dim=-1),
+                "loss_mask": combined_loss_mask
             },
             batch_size=batch_size,
         )
