@@ -391,12 +391,21 @@ class vLLMRollout(BaseRollout):
             new_seq_len = len(next_input_ids_list[i])
             # Truncate input length if larger than max prompt length
             # Left padding
-            batched_input_ids.append([self.pad_token_id] * (prompt_seq_len - new_seq_len) + next_input_ids_list[i]
-                                     if prompt_seq_len > new_seq_len else next_input_ids_list[:prompt_seq_len])
-            batched_attention_mask.append([0] * (prompt_seq_len - new_seq_len) + [1] * new_seq_len
-                                          if prompt_seq_len > new_seq_len else [1] * prompt_seq_len)
-            batched_position_ids.append([0] * (prompt_seq_len - new_seq_len) + list(range(new_seq_len))
-                                        if prompt_seq_len > new_seq_len else list(range(prompt_seq_len)))
+            if prompt_seq_len > new_seq_len:
+                # Left padding case
+                padding_len = prompt_seq_len - new_seq_len
+                input_ids = [self.pad_token_id] * padding_len + next_input_ids_list[i]
+                attention_mask = [0] * padding_len + [1] * new_seq_len
+                position_ids = [0] * padding_len + list(range(new_seq_len))
+            else:
+                # Truncation case
+                input_ids = next_input_ids_list[i][:prompt_seq_len] 
+                attention_mask = [1] * prompt_seq_len
+                position_ids = list(range(prompt_seq_len))
+            
+            batched_input_ids.append(input_ids)
+            batched_attention_mask.append(attention_mask)
+            batched_position_ids.append(position_ids)
         
         # Update multiturn_input
         multiturn_input = TensorDict(
