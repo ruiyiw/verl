@@ -703,13 +703,21 @@ class ActorRolloutRefWorker(Worker):
 
             return output_text, has_sep_token, pos
 
-        def format_next_prompt(prev_prompt: str, curr_action: str, next_obs: str):
+        def encode_next_prompt_ids(prev_prompt: str, curr_action: str, next_obs: str):
             next_prompt = prev_prompt + curr_action + f"\n\nstate: {next_obs}" + "\n\naction: "
-            return next_prompt
+            next_prompt_ids = self.tokenizer.encode(next_prompt, add_special_tokens=False)
+            # Add BOS token if not exists at the beginning
+            if next_prompt_ids[0] != self.tokenizer.bos_token_id:
+                next_prompt_ids = [self.tokenizer.bos_token_id] + next_prompt_ids
+            return next_prompt_ids
         
-        def format_multiturn_response(curr_action: str, sep_token: str, next_obs: str):
+        def encode_multiturn_response_ids(curr_action: str, sep_token: str, next_obs: str):
             response = curr_action + sep_token + f"\n\nstate: {next_obs}" + "\n\naction: "
-            return response
+            response_ids = self.tokenizer.encode(response, add_special_tokens=True)
+            # Remove BOS token if it exists at the beginning
+            if response_ids[0] == self.tokenizer.bos_token_id:
+                response_ids = response_ids[1:]
+            return response_ids
 
         def create_consistent_object_array(data):
             """Always creates 1D object array regardless of input structure"""
@@ -743,7 +751,7 @@ class ActorRolloutRefWorker(Worker):
             batched_actions = [[] for _ in range(len(input_batch))]
             batched_action_bos = [[] for _ in range(len(input_batch))]
             batched_sep_pos = [[] for _ in range(len(input_batch))]
-            batched_response_text = ["" for _ in range(len(input_batch))]
+            batched_response_ids = [[] for _ in range(len(input_batch))]
             batched_game_winning = [False for _ in range(len(input_batch))]
             batched_final_reward = [self.config.rollout.multiturn_config.format_reward for _ in range(len(input_batch))] # initialize final reward with format reward 
 
@@ -783,24 +791,22 @@ class ActorRolloutRefWorker(Worker):
                     batched_final_reward[idx] += 1.0 if is_winning else 0.0
                     # Construct and encode next input
                     input_text = self.tokenizer.decode(input_batch[idx].batch["input_ids"], skip_special_tokens=True)
-                    next_input_text = format_next_prompt(input_text, output_text, next_obs)
-                    next_input_ids = self.tokenizer.encode(next_input_text, add_special_tokens=False)
+                    next_input_ids = encode_next_prompt_ids(input_text, output_text, next_obs)
                     next_input_ids_list[idx] = next_input_ids
                     # Locate sep token position in output ids
-                    abs_action_bos = len(self.tokenizer.encode(batched_response_text[idx], add_special_tokens=True)) - 1 if k != 0 else 1 # minus [BOS] at first turn
+                    abs_action_bos = len(batched_response_ids[idx])
                     abs_sep_pos = abs_action_bos + sep_pos
                     batched_action_bos[idx].append(abs_action_bos)
                     batched_sep_pos[idx].append(abs_sep_pos)
                     # Concat multiturn response text
+                    batched_response_ids[idx] += encode_multiturn_response_ids(output_text, self.config.rollout.multiturn_config.sep_token, next_obs)
                     # torch.set_printoptions(threshold=float('inf'))
-                    # with open('debug.txt', 'a') as f:
-                    #     print(f"\n**** response text **** at turn {k}\n", file=f)
-                    #     print(batched_response_text[idx], file=f)
-                    #     print(f"\n**** response ids **** at turn {k}\n", file=f)
-                    #     print(self.tokenizer.encode(batched_response_text[idx], add_special_tokens=True), file=f)
+                    # with open('debug_3.txt', 'a') as f:
+                    #     print(f"\n**** input_ids **** at turn {k}\n", file=f)
+                    #     print(input_batch[idx].batch["input_ids"], file=f)
+                    #     print(f"\n**** input_text **** at turn {k}\n", file=f) 
+                    #     print(input_text, file=f)
                     # torch.set_printoptions(profile='default')
-
-                    batched_response_text[idx] += format_multiturn_response(output_text, self.config.rollout.multiturn_config.sep_token, next_obs)
                 
                 # Update input_batch DataProto for next turn
                 input_batch = self.rollout.update_multiturn_input_masks_and_positions(prompts=input_batch, next_input_ids_list=next_input_ids_list, prompt_seq_len=self.config.rollout.multiturn_config.prompt_len)
@@ -809,21 +815,25 @@ class ActorRolloutRefWorker(Worker):
                 input_batch.non_tensor_batch["raw_prompt_ids"] = np.array(next_input_ids_list, dtype=object)
         
         # Stack and pad multiturn output
-        multiturn_response_ids_list = [self.tokenizer.encode(text, add_special_tokens=True) for text in batched_response_text]
+        # multiturn_response_ids_list = [self.tokenizer.encode(text, add_special_tokens=True) for text in batched_response_text]
+        batched_response_text = [self.tokenizer.decode(ids, skip_special_tokens=False) for ids in batched_response_ids]
         # Build output_batch DataProto
-        output = self.rollout.build_multiturn_output_masks_and_positions(prompts=prompts, multiturn_response_ids_list=multiturn_response_ids_list, batched_sep_pos=batched_sep_pos, batched_action_bos=batched_action_bos, response_seq_len=self.config.rollout.multiturn_config.response_len)
+        output = self.rollout.build_multiturn_output_masks_and_positions(prompts=prompts, multiturn_response_ids_list=batched_response_ids, batched_sep_pos=batched_sep_pos, batched_action_bos=batched_action_bos, response_seq_len=self.config.rollout.multiturn_config.response_len)
         
-        # torch.set_printoptions(threshold=float('inf'))
-        # with open('debug.txt', 'a') as f:
-        #     for i in range(len(multiturn_response_ids_list)):
-        #         print(f"\n**** full response ****\n", file=f)
-        #         print(self.tokenizer.decode(output[i].batch["responses"], skip_special_tokens=False), file=f)
-        #         for k in range(len(batched_action_bos[i])):
-        #             action_ids = output[i].batch["responses"][batched_action_bos[i][k]:batched_sep_pos[i][k]+1]
-        #             action_text = self.tokenizer.decode(action_ids, skip_special_tokens=False)
-        #             print(f"\naction_ids at turn {k}: {action_ids}", file=f)
-        #             print(f"\naction_text at turn {k}: {action_text}", file=f)
-        # torch.set_printoptions(profile='default')
+        torch.set_printoptions(threshold=float('inf'))
+        with open('debug.txt', 'a') as f:
+            for i in range(len(batched_response_text)):
+                print(f"\n**** full response_ids ****\n", file=f)
+                # print(self.tokenizer.decode(output[i].batch["responses"], skip_special_tokens=False), file=f)
+                print(output[i].batch["responses"], file=f)
+                print(f"\n**** full response_ids ****\n", file=f)
+                print(batched_response_ids, file=f)
+                for k in range(len(batched_action_bos[i])):
+                    action_ids = output[i].batch["responses"][batched_action_bos[i][k]:batched_sep_pos[i][k]+1]
+                    action_text = self.tokenizer.decode(action_ids, skip_special_tokens=False)
+                    print(f"\naction_ids at turn {k}: {action_ids}", file=f)
+                    print(f"\naction_text at turn {k}: {action_text}", file=f)
+        torch.set_printoptions(profile='default')
         
         output.non_tensor_batch["raw_response_text"] = create_consistent_object_array(batched_response_text)
         output.non_tensor_batch["multiturn_action_bos"] = create_consistent_object_array(batched_action_bos)

@@ -65,6 +65,15 @@ class DenseRewardManager:
             prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
             response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
 
+            # tokens = data_item.batch["input_ids"]
+            # mask = data_item.batch["loss_mask"]
+            # mask = mask.squeeze().tolist()
+            # unmasked_tokens = [token for token, mask_val in zip(tokens, mask) if mask_val == 1]
+            # unmasked_response_text = self.tokenizer.decode(unmasked_tokens, skip_special_tokens=False)
+            # with open("mask.txt", 'a') as f:
+            #     print(unmasked_tokens, file=f)
+            #     print(unmasked_response_text, file=f)
+
             score = data_item.non_tensor_batch["multiturn_final_rewards"]
             sep_pos = data_item.non_tensor_batch["multiturn_sep_pos"]
 
