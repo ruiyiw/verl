@@ -1,31 +1,32 @@
 data_start=50001
 data_end=55000
 game_size=w2-o3-q4
-s3_train_data_dir="s3://ruiyi-search-agents/ppo_data/multiturn_ppo_data/tiny_search/5000_data/"
-s3_games_dir="s3://ruiyi-search-agents/ppo_data/game_data/tiny_search/"
-local_train_data_dir="local/full_train_data/"
-local_games_dir="local/games/"
-local_parquet_dir="local/full_train_parquet/"
+hf_repo="Pamela153/textworld"
+local_hf_dir="local"
+hf_train_data_folder="multiturn_ppo_data/5000_data"
+hf_games_folder="games"
+local_parquet_dir="local/train_parquet/"
 local_schema_dir="local/schemas/"
 
-# Download data from S3 bucket (should contain train.jsonl, validation.jsonl, and test.jsonl)
-aws s3 sync $s3_train_data_dir $local_train_data_dir
-# Download games from S3 bucket
-aws s3 sync $s3_games_dir $local_games_dir
+# Clone private HF repo using token
+git clone --filter=blob:none --no-checkout "https://user:${HF_TOKEN}@huggingface.co/datasets/${hf_repo}" $local_hf_dir
+cd $local_hf_dir
+git sparse-checkout init --cone
+git sparse-checkout set $hf_train_data_folder $hf_games_folder
+git checkout
+cd ..
+echo "✅ Private HF repo downloaded!"
 
 # Add training data and preprocess them into parquet
 python3 -m rl4textgame.data_process.data_preprocess \
     --task textworld \
     --dataset_id "${game_size}_${data_start}-${data_end}" \
-    --game_dir $local_games_dir \
-    --data_dir $local_train_data_dir \
+    --game_dir "${local_hf_dir}/${hf_games_folder}" \
+    --data_dir "${local_hf_dir}/${hf_train_data_folder}" \
     --local_dir $local_parquet_dir \
     --reward_method game_winning_dense
 
-# Remove .jsonl file
-rm -rf $local_train_data_dir
-
 # Generate json schema for guided vllm generation
-python3 -m rl4textgame.data_process.generate_json_schema \
-    --task textworld \
-    --local_dir $local_schema_dir
+# python3 -m rl4textgame.data_process.generate_json_schema \
+#     --task textworld \
+#     --local_dir $local_schema_dir
