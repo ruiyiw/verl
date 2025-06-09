@@ -1,10 +1,10 @@
 set -x
 
-s3_actor_model_path="s3://ruiyi-search-agents/sft_ckpt/w2-o3-q4_multiturn_sft/default_10000_data/huggingface/ba3075/"
+hf_actor_model_path="Pamela153/w2-o3-q4-multiturn-sft"
 actor_model_path=local/model/actor
 critic_model_path=local/model/critic
 base_model=meta-llama/Llama-3.1-8B
-data_path=local/full_multiturn_parquet
+data_path=local/train_parquet
 reward_func_path=rl4textgame/reward_score.py
 adv_estimator=gae
 policy_loss=ppo
@@ -21,22 +21,23 @@ project_name=textworld-ppo-multiturn
 experiment_name=ppo-multiturn-test
 nnodes=1
 num_epochs=5
-s3_save_dir=""
+hf_save_freq=1
+hf_save_dir="Pamela153/${project_name}_${experiment_name}"
 
 
 # Check if actor model is specified
-if [ -n "$s3_actor_model_path" ]; then
-    # If specified, download from S3 path if available
-    aws s3 sync $s3_actor_model_path $actor_model_path
+if [ -n "$hf_actor_model_path" ]; then
+    # If specified, download from HF path if available
+    huggingface-cli download $hf_actor_model_path --local-dir $actor_model_path
 else
     # Otherwise, use base model (from HF)
     actor_model_path=$base_model
 fi
 
 # Check if critic model is specified
-if [ -n "$s3_critic_model_path" ]; then
-    # If specified, download from S3 path if available
-    aws s3 sync $s3_critic_model_path $critic_model_path
+if [ -n "$hf_critic_model_path" ]; then
+    # If specified, download from HF path if available
+    huggingface-cli download $hf_critic_model_path --local-dir $actor_critic_path
 else
     # Otherwise, use base model (from HF)
     critic_model_path=$base_model
@@ -92,8 +93,9 @@ python3 -m rl4textgame.main_ppo \
     trainer.nnodes=$nnodes \
     trainer.n_gpus_per_node=8 \
     trainer.val_before_train=True \
-    trainer.save_freq=-1 \
-    trainer.s3_save_dir=$s3_save_dir \
+    trainer.save_freq=10 \
+    trainer.hf_save_freq=$hf_save_freq \
+    trainer.hf_save_dir=$hf_save_dir \
     trainer.resume_mode=auto \
     trainer.test_freq=5 \
     trainer.total_epochs=$num_epochs $@
