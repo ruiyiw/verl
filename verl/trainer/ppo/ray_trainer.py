@@ -652,18 +652,6 @@ class RayPPOTrainer:
 
         print(f"Dumped generations to {filename}")
 
-    # Added by Ruiyi Wang (05/29/2025)
-    # Add validation metrics for interactive multi-turn dense reward RL
-    def _upload_val_results(self, filename):
-        # Upload what was saved in local dir to S3 bucket
-        cmd = [
-            "aws", "s3", "sync",
-            "--only-show-errors",
-            filename,
-            os.path.join(self.config.trainer.s3_save_dir.rstrip('/'), "val_results")
-        ]
-        subprocess.run(cmd, check=True)
-
     def  _maybe_log_val_generations(self, inputs, outputs, scores):
         """Log a table of validation samples to the configured logger (wandb or swanlab)"""
 
@@ -819,9 +807,6 @@ class RayPPOTrainer:
                 reward_extra_infos_dict=reward_extra_infos_dict,
                 dump_path=val_data_dir,
             )
-            # Added by Ruiyi Wang (05/29/2025)
-            # Add validation metrics for interactive multi-turn dense reward RL
-            self._upload_val_results(val_data_dir)
 
         for key_info, lst in reward_extra_infos_dict.items():
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"
@@ -1282,6 +1267,9 @@ class RayPPOTrainer:
                     if self.config.trainer.save_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.save_freq == 0):
                         with _timer("save_checkpoint", timing_raw):
                             self._save_checkpoint()
+                            # Added by Ruiyi Wang (06/08/2025)
+                            # Save checkpoints, convert to safetensors, and upload to HF repo
+                            self._epoch_to_global_step()
 
                 # training metrics
                 metrics.update(
@@ -1303,59 +1291,50 @@ class RayPPOTrainer:
                 progress_bar.update(1)
                 self.global_steps += 1
                 if is_last_step:
-                    # Added by Ruiyi Wang (05/13/2025)
                     with _timer("save_checkpoint", timing_raw):
                         self._save_checkpoint()
+                        # Added by Ruiyi Wang (06/08/2025)
+                        # Save checkpoints, convert to safetensors, and upload to HF repo
+                        self._epoch_to_global_step(epoch)
+                        self._upload_checkpoint()
 
-                        print(f"Starting conversion and uploading for actor checkpoint at epoch {epoch+1}.")
-                        self.convert_and_upload_checkpoint("actor", epoch)
-
-                        if self.use_critic:
-                            print(f"Starting conversion and uploading for critic checkpoint at epoch {epoch+1}.")
-                            self.convert_and_upload_checkpoint("critic", epoch)
-                            
                     pprint(f"Final validation metrics: {last_val_metrics}")
                     progress_bar.close()
                     return
 
-            # Added by Ruiyi Wang (05/13/2025)
-            with _timer("save_checkpoint", timing_raw):
-                self._save_checkpoint()
 
-                print(f"Starting conversion and uploading for actor checkpoint at epoch {epoch+1}.")
-                self.convert_and_upload_checkpoint("actor", epoch)
-
-                if self.use_critic:
-                    print(f"Starting conversion and uploading for critic checkpoint at epoch {epoch+1}.")
-                    self.convert_and_upload_checkpoint("critic", epoch)
+    # Added by Ruiyi Wang (06/08/2025)
+    # Save checkpoints, convert to safetensors, and upload to HF repo
+    def _epoch_to_global_step(self, epoch: str):
+        with open(os.path.join(self.config.trainer.default_local_dir, "epoch_to_global_step.txt"), 'a') as f:
+            f.write(f"{epoch}:{self.global_steps}\n")
 
 
-    # Added by Ruiyi Wang (05/13/2025)
-    # After each epoch, save checkpoints, convert to safetensors, and upload to S3 bucket after each epoch
-    def convert_and_upload_checkpoint(self, model_type: str, epoch: int):
-        local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{self.global_steps}")
+    def _upload_checkpoint(self):
         
-        target_dir = f"local/tmp_ckpt/{model_type}"
-        os.makedirs(target_dir, exist_ok=True)
+        def _upload_subprocess(folder_path, path_in_repo, repo_id):
+            cmd = [
+                    "python3", "-m", "rl4textgame.utils.hf_upload",
+                    "--folder_path", folder_path,
+                    "--path_in_repo", path_in_repo,
+                    "--repo_id", repo_id
+                ]
+            subprocess.run(cmd, check=True)
+            
+        epoch_to_global_step = defaultdict()
+        with open(os.path.join(self.config.trainer.default_local_dir, "epoch_to_global_step.txt"), 'r') as f:
+            for line in f:
+                epoch, global_step = line.rstrip().split(":")[0], line.rstrip().split(":")[1]
+                epoch_to_global_step[epoch] = global_step
+        
+        for epoch in range(self.config.trainer.total_epochs):
+            if epoch % self.config.trainer.hf_save_freq == 0:
+                local_global_step_folder = os.path.join(self.config.trainer.default_local_dir, f"global_step_{epoch_to_global_step[epoch]}")
+                _upload_subprocess(
+                    folder_path=local_global_step_folder,
+                    path_in_repo=f"epoch_{epoch+1}",
+                    repo_id=self.config.trainer.hf_save_dir
+                )
 
-        cmd = [
-            "python3", "-m", "scripts.model_merger",
-            "merge",
-            "--backend", "fsdp",
-            "--local_dir", os.path.join(local_global_step_folder, model_type),
-            "--target_dir", target_dir
-        ]
-
-        # Start the process and let it run independently
-        subprocess.run(cmd, check=True)
-
-        cmd = [
-            "aws", "s3", "sync",
-            "--only-show-errors",
-            target_dir,
-            os.path.join(self.config.trainer.s3_save_dir.rstrip('/'), f"epoch_{epoch+1}", model_type)
-        ]
-
-        subprocess.run(cmd, check=True)
 
 
