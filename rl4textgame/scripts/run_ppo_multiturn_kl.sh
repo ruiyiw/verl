@@ -20,7 +20,7 @@ dense_reward_alpha=0.8
 project_name=textworld-ppo-multiturn
 experiment_name=ppo-multiturn-test
 nnodes=1
-num_epochs=5
+num_epochs=15
 hf_save_freq=1
 hf_save_dir="Pamela153/${project_name}_${experiment_name}"
 
@@ -73,6 +73,11 @@ python3 -m rl4textgame.main_ppo \
     actor_rollout_ref.rollout.n=$rollout_num \
     actor_rollout_ref.rollout.max_num_batched_tokens=8192 \
     actor_rollout_ref.rollout.val_kwargs.temperature=1.0 \
+    actor_rollout_ref.actor.optim.lr=5e-7 \
+    actor_rollout_ref.actor.optim.lr_warmup_steps_ratio=0.1 \
+    actor_rollout_ref.actor.optim.warmup_style=\"cosine\" \
+    actor_rollout_ref.actor.optim.min_lr_ratio=0.1 \
+    algorithm.kl_ctrl.kl_coef=0.005 \
     critic.optim.lr=1e-5 \
     critic.model.path=$critic_model_path \
     critic.model.enable_gradient_checkpointing=True \
@@ -85,6 +90,7 @@ python3 -m rl4textgame.main_ppo \
     custom_reward_function.path=$reward_func_path \
     custom_reward_function.name=reward_func \
     algorithm.adv_estimator=$adv_estimator \
+    algorithm.use_kl_in_reward=True\
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name=$project_name \
@@ -93,7 +99,7 @@ python3 -m rl4textgame.main_ppo \
     trainer.nnodes=$nnodes \
     trainer.n_gpus_per_node=8 \
     trainer.val_before_train=True \
-    trainer.save_freq=10 \
+    trainer.save_freq=-1 \
     trainer.hf_save_freq=$hf_save_freq \
     trainer.hf_save_dir=$hf_save_dir \
     trainer.resume_mode=auto \

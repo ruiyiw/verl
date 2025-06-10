@@ -820,20 +820,20 @@ class ActorRolloutRefWorker(Worker):
         # Build output_batch DataProto
         output = self.rollout.build_multiturn_output_masks_and_positions(prompts=prompts, multiturn_response_ids_list=batched_response_ids, batched_sep_pos=batched_sep_pos, batched_action_bos=batched_action_bos, response_seq_len=self.config.rollout.multiturn_config.response_len)
         
-        torch.set_printoptions(threshold=float('inf'))
-        with open('debug.txt', 'a') as f:
-            for i in range(len(batched_response_text)):
-                print(f"\n**** full response_ids ****\n", file=f)
-                # print(self.tokenizer.decode(output[i].batch["responses"], skip_special_tokens=False), file=f)
-                print(output[i].batch["responses"], file=f)
-                print(f"\n**** full response_ids ****\n", file=f)
-                print(batched_response_ids, file=f)
-                for k in range(len(batched_action_bos[i])):
-                    action_ids = output[i].batch["responses"][batched_action_bos[i][k]:batched_sep_pos[i][k]+1]
-                    action_text = self.tokenizer.decode(action_ids, skip_special_tokens=False)
-                    print(f"\naction_ids at turn {k}: {action_ids}", file=f)
-                    print(f"\naction_text at turn {k}: {action_text}", file=f)
-        torch.set_printoptions(profile='default')
+        # torch.set_printoptions(threshold=float('inf'))
+        # with open('debug.txt', 'a') as f:
+        #     for i in range(len(batched_response_text)):
+        #         print(f"\n**** full response_ids ****\n", file=f)
+        #         # print(self.tokenizer.decode(output[i].batch["responses"], skip_special_tokens=False), file=f)
+        #         print(output[i].batch["responses"], file=f)
+        #         print(f"\n**** full response_ids ****\n", file=f)
+        #         print(batched_response_ids, file=f)
+        #         for k in range(len(batched_action_bos[i])):
+        #             action_ids = output[i].batch["responses"][batched_action_bos[i][k]:batched_sep_pos[i][k]+1]
+        #             action_text = self.tokenizer.decode(action_ids, skip_special_tokens=False)
+        #             print(f"\naction_ids at turn {k}: {action_ids}", file=f)
+        #             print(f"\naction_text at turn {k}: {action_text}", file=f)
+        # torch.set_printoptions(profile='default')
         
         output.non_tensor_batch["raw_response_text"] = create_consistent_object_array(batched_response_text)
         output.non_tensor_batch["multiturn_action_bos"] = create_consistent_object_array(batched_action_bos)

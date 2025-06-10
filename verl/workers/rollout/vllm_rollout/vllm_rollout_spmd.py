@@ -484,7 +484,8 @@ class vLLMRollout(BaseRollout):
                 "input_ids": torch.cat([prompts.batch["input_ids"], multiturn_output_batch_ids], dim=-1),  # here input_ids become the whole sentences
                 "attention_mask": torch.cat((attention_mask, response_attention_mask), dim=-1),
                 "position_ids": torch.cat([position_ids, response_position_ids], dim=-1),
-                "loss_mask": combined_loss_mask
+                "loss_mask": combined_loss_mask,
+                "response_mask": multiturn_response_loss_mask
             },
             batch_size=batch_size,
         )

@@ -65,35 +65,27 @@ class DenseRewardManager:
             prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
             response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
 
+            score = data_item.non_tensor_batch["multiturn_final_rewards"]
+            sep_pos = reversed(data_item.non_tensor_batch["multiturn_sep_pos"])
+            action_bos = reversed(data_item.non_tensor_batch["multiturn_action_bos"])
+
+            # Assign dense reward to reward tensor [α^k r, ..., α^2 r, α^2 r, ..., α r, α r, α r, r]
+            for start, end in zip(action_bos, sep_pos):
+                reward_tensor[i, end] = score
+                score *= self.alpha
+                for k in range(start, end):
+                    reward_tensor[i, k] = score
+                    
             # tokens = data_item.batch["input_ids"]
             # mask = data_item.batch["loss_mask"]
             # mask = mask.squeeze().tolist()
             # unmasked_tokens = [token for token, mask_val in zip(tokens, mask) if mask_val == 1]
             # unmasked_response_text = self.tokenizer.decode(unmasked_tokens, skip_special_tokens=False)
+            # torch.set_printoptions(threshold=float('inf'))
             # with open("mask.txt", 'a') as f:
-            #     print(unmasked_tokens, file=f)
             #     print(unmasked_response_text, file=f)
-
-            score = data_item.non_tensor_batch["multiturn_final_rewards"]
-            sep_pos = data_item.non_tensor_batch["multiturn_sep_pos"]
-
-            # Assign dense reward to reward tensor [α^k r, ..., α^2 r, α^2 r, ..., α r, α r, α r, r]
-            for j, pos in enumerate(reversed(sep_pos)):
-                # Discard reward if pos is larger than response length
-                if pos >= len(response_ids):
-                    break
-                if j == 0:
-                    reward_tensor[i, pos] = score
-                else:
-                    for k in range(pos, prev_pos):
-                        reward_tensor[i, k] = score
-                prev_pos = pos
-                score *= self.alpha
-            
-            # Discard reward if pos is larger than response length
-            if sep_pos[0] < len(response_ids):
-                for k in range(sep_pos[0]):
-                    reward_tensor[i, k] = score
+            #     print(reward_tensor, file=f)
+            # torch.set_printoptions(profile='default')
 
             data_source = data_item.non_tensor_batch[self.reward_fn_key]
             ground_truth = data_item.non_tensor_batch["extra_info"]["response"]

@@ -1112,7 +1112,12 @@ class RayPPOTrainer:
                     batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)
                     batch = batch.union(gen_batch_output)
 
-                    batch.batch["response_mask"] = compute_response_mask(batch)
+                    # batch.batch["response_mask"] = compute_response_mask(batch)
+                    # Modified by Ruiyi Wang (06/09/2025)
+                    # Enable response loss for multiturn
+                    if not self.config.actor_rollout_ref.rollout.multiturn_config.is_multiturn:
+                        batch.batch["response_mask"] = compute_response_mask(batch)
+
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
                     # Please take care when you implement group based adv computation such as GRPO and rloo
@@ -1269,7 +1274,7 @@ class RayPPOTrainer:
                             self._save_checkpoint()
                             # Added by Ruiyi Wang (06/08/2025)
                             # Save checkpoints, convert to safetensors, and upload to HF repo
-                            self._epoch_to_global_step()
+                            self._epoch_to_global_step(epoch)
 
                 # training metrics
                 metrics.update(
