@@ -6,10 +6,10 @@ game_size=w2-o3-q4
 hf_repo=$HF_DATA_REPO
 hf_games_dir=$HF_GAMES_DIR
 hf_train_data_dir=$HF_TRAIN_DATA_DIR
-local_games_dir="local/games/"
-local_train_data_dir="local/train_data/"
-local_parquet_dir="local/train_parquet/"
-local_schema_dir="local/schemas/"
+local_games_dir="local/games"
+local_train_data_dir="local/multiturn_ppo_data/5000_data"
+local_parquet_dir="local/train_parquet"
+local_schema_dir="local/schemas"
 reward_method=$REWARD_METHOD
 
 # HF download games and train data
