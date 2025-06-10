@@ -1,6 +1,7 @@
 set -x
 export HYDRA_FULL_ERROR=1
 
+hf_actor_model_path=$HF_ACTOR_MODEL_PATH
 actor_model_path=local/model/actor
 critic_model_path=local/model/critic
 base_model=$BASE_MODEL
@@ -21,22 +22,23 @@ project_name=$PROJECT_NAME
 experiment_name=$EXPERIMENT_NAME
 nnodes=1
 num_epochs=$NUM_EPOCHS
-s3_save_dir=$S3_SAVE_DIR
+hf_save_freq=1
+hf_save_dir="Pamela153/${project_name}_${experiment_name}"
 
 
 # Check if actor model is specified
-if [ -n "$S3_ACTOR_MODEL_PATH" ]; then
-    # If specified, download from S3 path if available
-    aws s3 sync $S3_ACTOR_MODEL_PATH $actor_model_path --only-show-errors
+if [ -n "$hf_actor_model_path" ]; then
+    # If specified, download from HF path if available
+    huggingface-cli download $hf_actor_model_path --local-dir $actor_model_path
 else
     # Otherwise, use base model (from HF)
     actor_model_path=$base_model
 fi
 
 # Check if critic model is specified
-if [ -n "$S3_CRITIC_MODEL_PATH" ]; then
-    # If specified, download from S3 path if available
-    aws s3 sync $S3_CRITIC_MODEL_PATH $critic_model_path --only-show-errors
+if [ -n "$hf_critic_model_path" ]; then
+    # If specified, download from HF path if available
+    huggingface-cli download $hf_critic_model_path --local-dir $actor_critic_path
 else
     # Otherwise, use base model (from HF)
     critic_model_path=$base_model
@@ -94,7 +96,8 @@ python3 -m rl4textgame.main_ppo \
     trainer.n_gpus_per_node=8 \
     trainer.val_before_train=True \
     trainer.save_freq=-1 \
-    trainer.s3_save_dir=$s3_save_dir \
+    trainer.hf_save_freq=$hf_save_freq \
+    trainer.hf_save_dir=$hf_save_dir \
     trainer.resume_mode=auto \
     trainer.test_freq=5 \
     trainer.total_epochs=$num_epochs $@
