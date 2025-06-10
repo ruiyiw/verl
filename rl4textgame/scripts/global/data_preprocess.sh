@@ -40,18 +40,13 @@ for tar_file in "$full_games_dir"/*.tar.gz; do
 done
 
 # Add training data and preprocess them into parquet
-python3 -m rl4textgame.data_process.data_preprocess \
+python3 -m rl4textgame.utils.data_preprocess \
     --task textworld \
     --dataset_id "${game_size}_${data_start}-${data_end}" \
     --game_dir $local_games_dir \
     --data_dir $local_train_data_dir \
     --local_dir $local_parquet_dir \
     --reward_method $reward_method
-
-# # Generate json schema for guided vllm generation
-# python3 -m rl4textgame.data_process.generate_json_schema \
-#     --task textworld \
-#     --local_dir $local_schema_dir
 
 # remove cache and redundant files
 rm -rf "local/.cache/"
