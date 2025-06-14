@@ -37,7 +37,7 @@ if [ -n "$hf_actor_repo_id" ]; then
         huggingface-cli download $hf_actor_repo_id --local-dir $actor_model_path
     else
         # Download specific path and flatten
-        huggingface-cli download $hf_actor_repo_id $hf_actor_model_path --local-dir $actor_model_path
+        huggingface-cli download $hf_actor_repo_id --include="${hf_actor_model_path}/*" --local-dir $actor_model_path
         mv $actor_model_path/$hf_actor_model_path/* $actor_model_path/
         rm -rf $actor_model_path/$hf_actor_model_path
         rm -rf $actor_model_path/.cache
@@ -55,7 +55,7 @@ if [ -n "$hf_critic_repo_id" ]; then
         huggingface-cli download $hf_critic_repo_id --local-dir $critic_model_path
     else
         # Download specific path and flatten
-        huggingface-cli download $hf_critic_repo_id $hf_critic_model_path --local-dir $actor_critic_path
+        huggingface-cli download $hf_critic_repo_id --include="${hf_critic_model_path}/*" --local-dir $actor_critic_path
         mv $critic_model_path/$hf_critic_model_path/* $critic_model_path/
         rm -rf $critic_model_path/$hf_critic_model_path
         rm -rf $critic_model_path/.cache
