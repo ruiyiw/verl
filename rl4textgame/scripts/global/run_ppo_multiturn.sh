@@ -1,6 +1,10 @@
 set -x
 export HYDRA_FULL_ERROR=1
 
+hf_actor_repo_id=$HF_ACTOR_REPO_ID
+hf_actor_model_path=$HF_ACTOR_MODEL_PATH
+hf_critic_repo_id=$HF_CRITIC_REPO_ID
+hf_critic_model_path=$HF_CRITIC_MODEL_PATH
 actor_model_path=local/model/actor
 critic_model_path=local/model/critic
 base_model=$BASE_MODEL
@@ -21,22 +25,41 @@ project_name=$PROJECT_NAME
 experiment_name=$EXPERIMENT_NAME
 nnodes=1
 num_epochs=$NUM_EPOCHS
-s3_save_dir=$S3_SAVE_DIR
+hf_save_freq=1
+hf_save_dir="Pamela153/${project_name}_${experiment_name}"
 
 
 # Check if actor model is specified
-if [ -n "$S3_ACTOR_MODEL_PATH" ]; then
-    # If specified, download from S3 path if available
-    aws s3 sync $S3_ACTOR_MODEL_PATH $actor_model_path --only-show-errors
+if [ -n "$hf_actor_repo_id" ]; then
+    # If specified, download from HF path if available
+    if [ -z "$hf_actor_model_path" ]; then
+        # Download entire repo if path is empty/None
+        huggingface-cli download $hf_actor_repo_id --local-dir $actor_model_path
+    else
+        # Download specific path and flatten
+        huggingface-cli download $hf_actor_repo_id $hf_actor_model_path --local-dir $actor_model_path
+        mv $actor_model_path/$hf_actor_model_path/* $actor_model_path/
+        rm -rf $actor_model_path/$hf_actor_model_path
+        rm -rf $actor_model_path/.cache
+    fi
 else
     # Otherwise, use base model (from HF)
     actor_model_path=$base_model
 fi
 
 # Check if critic model is specified
-if [ -n "$S3_CRITIC_MODEL_PATH" ]; then
-    # If specified, download from S3 path if available
-    aws s3 sync $S3_CRITIC_MODEL_PATH $critic_model_path --only-show-errors
+if [ -n "$hf_critic_repo_id" ]; then
+    # If specified, download from HF path if available
+    if [ -z "$hf_critic_model_path" ]; then
+        # Download entire repo if path is empty/None
+        huggingface-cli download $hf_critic_repo_id --local-dir $critic_model_path
+    else
+        # Download specific path and flatten
+        huggingface-cli download $hf_critic_repo_id $hf_critic_model_path --local-dir $actor_critic_path
+        mv $critic_model_path/$hf_critic_model_path/* $critic_model_path/
+        rm -rf $critic_model_path/$hf_critic_model_path
+        rm -rf $critic_model_path/.cache
+    fi
 else
     # Otherwise, use base model (from HF)
     critic_model_path=$base_model
