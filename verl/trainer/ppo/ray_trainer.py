@@ -604,6 +604,25 @@ class RayPPOTrainer:
             collate_fn=collate_fn,
         )
 
+        # Added by Ruiyi Wang (06/13/2025)
+        # Add test dataset
+        self.has_test_data = False
+        if self.config.data.test_files:
+            self.has_test_data = True
+            self.test_dataset = create_rl_dataset(self.config.data.test_files, self.config.data, self.tokenizer, self.processor)
+            self.test_dataloader = StatefulDataLoader(
+                dataset=self.test_dataset,
+                batch_size=val_batch_size,
+                num_workers=self.config.data.get("dataloader_num_workers", 8),
+                shuffle=False,
+                drop_last=False,
+                collate_fn=collate_fn,
+            )
+            test_batch_size = self.config.data.val_batch_size  # Prefer config value if set
+            if test_batch_size is None:
+                test_batch_size = len(self.test_dataset)
+
+
         assert len(self.train_dataloader) >= 1, "Train dataloader is empty!"
         assert len(self.val_dataloader) >= 1, "Validation dataloader is empty!"
 
@@ -676,7 +695,10 @@ class RayPPOTrainer:
         # Log to each configured logger
         self.validation_generations_logger.log(self.config.trainer.logger, samples, self.global_steps)
 
-    def _validate(self):
+    # Modified by Ruiyi Wang (06/13/2025)
+    # Add test data
+    # def _validate(self):
+    def _validate(self, type="val"):
         data_source_lst = []
         reward_extra_infos_dict: dict[str, list] = defaultdict(list)
 
@@ -685,7 +707,11 @@ class RayPPOTrainer:
         sample_outputs = []
         sample_scores = []
 
-        for test_data in self.val_dataloader:
+        # Modified by Ruiyi Wang
+        dataloader = self.val_dataloader if type == "val" else self.test_dataloader
+
+        # for test_data in self.val_dataloader:
+        for test_data in dataloader:
             test_batch = DataProto.from_single_dict(test_data)
 
             # repeat test batch
@@ -798,15 +824,26 @@ class RayPPOTrainer:
         self._maybe_log_val_generations(inputs=sample_inputs, outputs=sample_outputs, scores=sample_scores)
 
         # dump generations
-        val_data_dir = self.config.trainer.get("validation_data_dir", None)
-        if val_data_dir:
-            self._dump_generations(
-                inputs=sample_inputs,
-                outputs=sample_outputs,
-                scores=sample_scores,
-                reward_extra_infos_dict=reward_extra_infos_dict,
-                dump_path=val_data_dir,
-            )
+        # val_data_dir = self.config.trainer.get("validation_data_dir", None)
+        # if val_data_dir:
+        #     self._dump_generations(
+        #         inputs=sample_inputs,
+        #         outputs=sample_outputs,
+        #         scores=sample_scores,
+        #         reward_extra_infos_dict=reward_extra_infos_dict,
+        #         dump_path=val_data_dir,
+        #     )
+        # Modified by Ruiyi Wang
+        if type == "val":
+            val_data_dir = self.config.trainer.get("validation_data_dir", None)
+            if val_data_dir:
+                self._dump_generations(
+                    inputs=sample_inputs,
+                    outputs=sample_outputs,
+                    scores=sample_scores,
+                    reward_extra_infos_dict=reward_extra_infos_dict,
+                    dump_path=val_data_dir,
+                )
 
         for key_info, lst in reward_extra_infos_dict.items():
             assert len(lst) == 0 or len(lst) == len(sample_scores), f"{key_info}: {len(lst)=}, {len(sample_scores)=}"
@@ -821,9 +858,12 @@ class RayPPOTrainer:
                 n_max = max([int(name.split("@")[-1].split("/")[0]) for name in metric2val.keys()])
                 for metric_name, metric_val in metric2val.items():
                     if (var_name == core_var) and any(metric_name.startswith(pfx) for pfx in ["mean", "maj", "best"]) and (f"@{n_max}" in metric_name):
-                        metric_sec = "val-core"
+                        # Modified by Ruiyi Wang
+                        # metric_sec = "val-core"
+                        metric_sec = "val-core" if type == "val" else "test-core"
                     else:
-                        metric_sec = "val-aux"
+                        # metric_sec = "val-aux"
+                        metric_sec = "val-aux" if type == "val" else "test-aux"
                     pfx = f"{metric_sec}/{data_source}/{var_name}/{metric_name}"
                     metric_dict[pfx] = metric_val
 
@@ -1038,6 +1078,11 @@ class RayPPOTrainer:
             assert val_metrics, f"{val_metrics=}"
             pprint(f"Initial validation metrics: {val_metrics}")
             logger.log(data=val_metrics, step=self.global_steps)
+            # Added by Ruiyi Wang
+            test_metrics = self._validate(type="test")
+            pprint(f"Initial test metrics: {test_metrics}")
+            logger.log(data=test_metrics, step=self.global_steps)
+
             if self.config.trainer.get("val_only", False):
                 return
 
@@ -1268,6 +1313,13 @@ class RayPPOTrainer:
                             if is_last_step:
                                 last_val_metrics = val_metrics
                         metrics.update(val_metrics)
+                        # Added by Ruiyi Wang
+                        with _timer("testing", timing_raw):
+                            test_metrics: dict = self._validate(type="test")
+                            if is_last_step:
+                                last_test_metrics = test_metrics
+                        metrics.update(test_metrics)
+                        
 
                     if self.config.trainer.save_freq > 0 and (is_last_step or self.global_steps % self.config.trainer.save_freq == 0):
                         with _timer("save_checkpoint", timing_raw):
@@ -1304,6 +1356,8 @@ class RayPPOTrainer:
                         self._upload_checkpoint()
 
                     pprint(f"Final validation metrics: {last_val_metrics}")
+                    # Added by Ruiyi Wang
+                    pprint(f"Final test metrics: {last_test_metrics}")
                     progress_bar.close()
                     return
 
