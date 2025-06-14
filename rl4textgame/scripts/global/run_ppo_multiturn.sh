@@ -68,6 +68,7 @@ fi
 python3 -m rl4textgame.main_ppo \
     data.train_files="$data_path/train.parquet" \
     data.val_files="$data_path/validation.parquet" \
+    data.test_files="$data_path/test.parquet" \
     data.max_prompt_length=2048 \
     data.max_response_length=2048 \
     data.train_batch_size=256 \
